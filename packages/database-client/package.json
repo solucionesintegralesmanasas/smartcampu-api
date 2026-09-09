@@ -1,0 +1,20 @@
+{
+  "name": "@uajs/database-client",
+  "version": "2.1.0",
+  "description": "Pool MySQL + Redis Enterprise con Circuit Breaker para UAJS Smart Campus",
+  "main": "index.js",
+  "scripts": {
+    "test": "node -e \"require('./index.js')\"",
+    "verify": "node -e \"require('./index.js'); console.log('OK')\""
+  },
+  "dependencies": {
+    "ioredis": "^5.3.2",
+    "mysql2": "^3.9.1",
+    "opossum": "^8.5.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}

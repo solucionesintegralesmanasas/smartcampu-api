@@ -1,0 +1,20 @@
+{
+  "name": "@uajs/shared-elasticsearch",
+  "version": "2.1.0",
+  "description": "Cliente Elasticsearch Enterprise con Circuit Breaker, ILM, Bulk Processing y Monitoring",
+  "main": "index.js",
+  "scripts": {
+    "test": "node -e \"require('./index.js')\"",
+    "verify": "node -e \"require('./index.js'); console.log('OK')\""
+  },
+  "dependencies": {
+    "@elastic/elasticsearch": "^8.12.0",
+    "opossum": "^8.5.0",
+    "uuid": "^9.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}
