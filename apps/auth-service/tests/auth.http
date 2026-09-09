@@ -1,0 +1,93 @@
+### Variables - Cambia el host según tu entorno
+@base = http://localhost:3001
+@contentType = application/json
+
+### ============================================
+### HEALTH CHECK
+### ============================================
+
+GET {{base}}/healthz
+Content-Type: {{contentType}}
+
+### ============================================
+### REGISTRO DE USUARIO
+### ============================================
+# Crea la persona en la tabla `persons` y el usuario en `users`
+# (vinculado por person_id). El rol por defecto es STUDENT.
+# OJO: este correo ya existe; reutilizarlo devuelve ConflictError (409).
+# Para probar el registro usa un correo/cedula distintos.
+
+# @name register
+POST {{base}}/api/v1/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "mdarwin1992@hotmail.com",
+  "password": "NuevaPassword.2026",
+  "firstName": "Darwin",
+  "lastName": "Montes",
+  "documentTypeCode": "CC",
+  "documentNumber": "1100688704"
+}
+
+### ============================================
+### LOGIN
+### ============================================
+# Usa las mismas credenciales del registro.
+
+# @name login
+POST {{base}}/api/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "mdarwin1992@hotmail.com",
+  "password": "NuevaPassword.2026"
+}
+
+### ============================================
+### REFRESH TOKEN
+### Usa el refreshToken devuelto por LOGIN automáticamente.
+### ============================================
+
+POST {{base}}/api/v1/auth/refresh
+Content-Type: {{contentType}}
+
+{
+  "refreshToken": "{{login.response.body.data.refreshToken}}"
+}
+
+### ============================================
+### LOGOUT (CERRAR SESIÓN)
+### Invalida el refreshToken en la tabla `refresh_tokens`.
+### ============================================
+
+POST {{base}}/api/v1/auth/logout
+Content-Type: {{contentType}}
+
+{
+  "refreshToken": "{{login.response.body.data.refreshToken}}"
+}
+
+### ============================================
+### SOLICITAR RESET DE CONTRASEÑA
+### ============================================
+
+POST {{base}}/api/v1/auth/password-reset
+Content-Type: {{contentType}}
+
+{
+  "email": "mdarwin1992@hotmail.com"
+}
+
+### ============================================
+### CONFIRMAR RESET DE CONTRASEÑA
+### Pegar el token del email (o del log de BullMQ)
+### ============================================
+
+POST {{base}}/api/v1/auth/password-reset/confirm
+Content-Type: {{contentType}}
+
+{
+  "token": "PEGA_AQUI_EL_TOKEN_DE_RESET",
+  "password": "NuevaPassword.2026"
+}

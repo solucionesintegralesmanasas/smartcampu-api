@@ -1,0 +1,71 @@
+openapi: 3.0.0
+info:
+  title: API de Autenticación Enterprise
+  version: 1.0.0
+  description: Servicio de autenticación, autorización y gestión de eventos de seguridad.
+servers:
+  - url: /api/v1
+paths:
+  /auth/register:
+    post:
+      summary: Registro de nuevo usuario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8 }
+                firstName: { type: string }
+                middleName: { type: string }
+                lastName: { type: string }
+                secondLastName: { type: string }
+                documentTypeCode:
+                  {
+                    type: string,
+                    description: 'Código DANE del tipo de documento (CC, TI, CE, PAS, ...)',
+                  }
+                documentNumber: { type: string }
+                phone: { type: string }
+      responses:
+        '201':
+          description: Usuario registrado exitosamente
+  /auth/login:
+    post:
+      summary: Inicio de sesión
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: Inicio de sesión exitoso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken: { type: string }
+                  refreshToken: { type: string }
+                  expiresIn: { type: string }
+  /auth/logout:
+    post:
+      summary: Cierre de sesión (invalida el refresh token)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200':
+          description: Sesión cerrada exitosamente

@@ -1,0 +1,39 @@
+{
+  "name": "auth-service",
+  "version": "1.0.0",
+  "description": "Servicio de autenticación Enterprise con Elasticsearch y BullMQ",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test:unit": "jest tests/unit",
+    "test:e2e": "jest tests/e2e",
+    "test:coverage": "jest --coverage"
+  },
+  "dependencies": {
+    "@uajs/database-client": "file:../../packages/database-client",
+    "@uajs/shared-elasticsearch": "file:../../packages/shared-elasticsearch",
+    "@uajs/shared-utils": "file:../../packages/shared-utils",
+    "bcrypt": "^5.1.1",
+    "bullmq": "^4.12.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
+    "helmet": "^7.1.0",
+    "ioredis": "^5.3.2",
+    "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.24.3",
+    "swagger-ui-express": "^5.0.0",
+    "uuid": "^9.0.1",
+    "winston": "^3.11.0",
+    "winston-elasticsearch": "^0.18.0",
+    "yamljs": "^0.3.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.2",
+    "supertest": "^6.3.3"
+  }
+}
