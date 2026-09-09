@@ -1,0 +1,276 @@
+openapi: 3.0.0
+info:
+  title: Catalog Service API
+  version: 1.0.0
+  description: Enterprise catalog service with CRUD, Redis cache and Elasticsearch indexing.
+servers:
+  - url: /api/v1
+paths:
+  /catalog/health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: Service status
+  /catalog/departments:
+    get:
+      summary: List departments
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+      responses:
+        '200':
+          description: List of departments
+    post:
+      summary: Create department
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                daneCode: { type: string }
+      responses:
+        '201':
+          description: Department created
+  /catalog/departments/search:
+    get:
+      summary: Search departments
+      parameters:
+        - name: search
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Search results
+  /catalog/departments/{id}:
+    get:
+      summary: Get department by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Department found
+    put:
+      summary: Update department
+      responses:
+        '200':
+          description: Department updated
+    delete:
+      summary: Delete department
+      responses:
+        '200':
+          description: Department deleted
+  /catalog/cities:
+    get:
+      summary: List cities
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+      responses:
+        '200':
+          description: List of cities
+    post:
+      summary: Create city
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                stateId: { type: integer }
+                name: { type: string }
+                daneCode: { type: string }
+      responses:
+        '201':
+          description: City created
+  /catalog/cities/search:
+    get:
+      summary: Search cities
+      parameters:
+        - name: search
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Search results
+  /catalog/cities/state/{stateId}:
+    get:
+      summary: List cities by state
+      parameters:
+        - name: stateId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: List of cities
+  /catalog/cities/{id}:
+    get:
+      summary: Get city by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: City found
+    put:
+      summary: Update city
+      responses:
+        '200':
+          description: City updated
+    delete:
+      summary: Delete city
+      responses:
+        '200':
+          description: City deleted
+  /catalog/campuses:
+    get:
+      summary: List campuses
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+      responses:
+        '200':
+          description: List of campuses
+    post:
+      summary: Create campus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cityId: { type: integer }
+                name: { type: string }
+                address: { type: string }
+                phone: { type: string }
+      responses:
+        '201':
+          description: Campus created
+  /catalog/campuses/search:
+    get:
+      summary: Search campuses
+      parameters:
+        - name: search
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Search results
+  /catalog/campuses/city/{cityId}:
+    get:
+      summary: List campuses by city
+      parameters:
+        - name: cityId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: List of campuses
+  /catalog/campuses/{id}:
+    get:
+      summary: Get campus by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Campus found
+    put:
+      summary: Update campus
+      responses:
+        '200':
+          description: Campus updated
+    delete:
+      summary: Delete campus
+      responses:
+        '200':
+          description: Campus deleted
+  /catalog/document-types:
+    get:
+      summary: List document types
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+      responses:
+        '200':
+          description: List of document types
+    post:
+      summary: Create document type
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                code: { type: string }
+                requiresCheckDigit: { type: boolean }
+      responses:
+        '201':
+          description: Document type created
+  /catalog/document-types/search:
+    get:
+      summary: Search document types
+      parameters:
+        - name: search
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Search results
+  /catalog/document-types/{id}:
+    get:
+      summary: Get document type by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Document type found
+    put:
+      summary: Update document type
+      responses:
+        '200':
+          description: Document type updated
+    delete:
+      summary: Delete document type
+      responses:
+        '200':
+          description: Document type deleted
