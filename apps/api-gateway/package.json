@@ -1,0 +1,37 @@
+{
+  "name": "@uajs/api-gateway",
+  "version": "2.1.0",
+  "description": "API Gateway Enterprise para UAJS Smart Campus",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "jest --runInBand",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint src/ tests/ jest.config.js"
+  },
+  "dependencies": {
+    "@uajs/database-client": "file:../../packages/database-client",
+    "@uajs/shared-elasticsearch": "file:../../packages/shared-elasticsearch",
+    "@uajs/shared-types": "file:../../packages/shared-types",
+    "@uajs/shared-utils": "file:../../packages/shared-utils",
+    "compression": "^1.7.4",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.18.2",
+    "express-async-errors": "^3.1.1",
+    "helmet": "^7.1.0",
+    "http-proxy-middleware": "^2.0.6",
+    "jsonwebtoken": "^9.0.2",
+    "opossum": "^8.5.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "private": true
+}
