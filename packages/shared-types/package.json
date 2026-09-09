@@ -1,0 +1,17 @@
+{
+  "name": "@uajs/shared-types",
+  "version": "1.0.0",
+  "description": "DTOs, esquemas de eventos y catálogos canónicos para UAJS Smart Campus",
+  "main": "index.js",
+  "types": "index.js",
+  "scripts": {
+    "test": "node -e \"require('./index.js')\"",
+    "verify": "node -e \"const t = require('./index.js'); console.log(Object.keys(t));\""
+  },
+  "dependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}

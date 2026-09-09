@@ -1,0 +1,19 @@
+{
+  "name": "@uajs/shared-utils",
+  "version": "1.0.0",
+  "description": "Logger, crypto, response helpers y constantes compartidas para UAJS Smart Campus",
+  "main": "index.js",
+  "scripts": {
+    "test": "node -e \"require('./index.js')\"",
+    "verify": "node -e \"require('./index.js'); console.log('OK')\""
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "winston": "^3.11.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}
