@@ -1,0 +1,77 @@
+{
+  "name": "uajs-smart-campus-monorepo",
+  "version": "2.1.0",
+  "private": true,
+  "description": "UAJS Smart Campus — Monorepo Enterprise con 12 microservicios + Elasticsearch + Turborepo",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "test:watch": "turbo run test --watch",
+    "lint": "turbo run lint",
+    "lint:fix": "turbo run lint -- --fix",
+    "format": "prettier --write \"**/*.{js,json,md,yaml,yml}\"",
+    "format:check": "prettier --check \"**/*.{js,json,md,yaml,yml}\"",
+    "validate:env": "node scripts/validate-env.js",
+    "generate:secrets": "node scripts/generate-secrets.js",
+    "docker:up": "docker compose -f infrastructure/docker/docker-compose.yml up -d",
+    "docker:down": "docker compose -f infrastructure/docker/docker-compose.yml down",
+    "docker:logs": "docker compose -f infrastructure/docker/docker-compose.yml logs -f",
+    "es:setup": "node scripts/elasticsearch/setup.js",
+    "es:status": "node scripts/elasticsearch/setup.js --status",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "prepare": "husky install"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^18.4.3",
+    "@commitlint/config-conventional": "^18.4.3",
+    "@elastic/elasticsearch": "^8.19.2",
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.10",
+    "@types/node": "^20.10.2",
+    "eslint": "^8.55.0",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-plugin-import": "^2.29.0",
+    "husky": "^8.0.3",
+    "jest": "^29.7.0",
+    "lint-staged": "^15.1.0",
+    "opossum": "^8.5.0",
+    "prettier": "^3.1.0",
+    "supertest": "^6.3.3",
+    "turbo": "^1.10.16",
+    "uuid": "^9.0.1",
+    "zod": "^3.22.4"
+  },
+  "lint-staged": {
+    "*.{js,json,md,yaml,yml}": [
+      "prettier --write"
+    ],
+    "*.js": [
+      "eslint --fix"
+    ]
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/uajs/smart-campus-monorepo.git"
+  },
+  "author": "UAJS Team",
+  "license": "MIT",
+  "main": ".eslintrc.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "keywords": [],
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/uajs/smart-campus-monorepo/issues"
+  },
+  "homepage": "https://github.com/uajs/smart-campus-monorepo#readme"
+}

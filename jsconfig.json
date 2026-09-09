@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "@apps/*": ["apps/*/src"],
+      "@packages/*": ["packages/*/src"],
+      "@shared-types": ["packages/shared-types/src"],
+      "@shared-utils": ["packages/shared-utils/src"],
+      "@database-client": ["packages/database-client/src"]
+    },
+    "types": ["node", "jest"],
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "exclude": ["node_modules", "dist", "build", "coverage", ".turbo"],
+  "include": ["apps/*/src/**/*.js", "packages/*/src/**/*.js", "scripts/**/*.js"]
+}
