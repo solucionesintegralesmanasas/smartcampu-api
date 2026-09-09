@@ -1,0 +1,30 @@
+services:
+  elasticsearch:
+    environment:
+      - xpack.security.enabled=false
+      - xpack.security.http.ssl.enabled=false
+      - xpack.security.transport.ssl.enabled=false
+      - discovery.type=single-node
+      - 'ES_JAVA_OPTS=-Xms512m -Xmx512m'
+    ports:
+      - '9200:9200'
+      - '9300:9300'
+
+  kibana:
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - xpack.security.enabled=false
+    ports:
+      - '5601:5601'
+
+  api-gateway:
+    environment:
+      - NODE_ENV=development
+
+  auth-service:
+    environment:
+      - NODE_ENV=development
+
+  catalog-service:
+    environment:
+      - NODE_ENV=development

@@ -1,0 +1,28 @@
+# ======================================================
+# Dockerfile.base - Imagen base para todos los servicios
+# ======================================================
+FROM node:20-alpine
+
+# Instalar herramientas útiles (wget, curl) y build tools para módulos nativos (bcrypt)
+RUN apk add --no-cache wget curl python3 make g++
+
+WORKDIR /app
+
+# Copiar todo el proyecto (node_modules excluido vía .dockerignore)
+COPY . .
+
+# Instalar dependencias de todos los workspaces
+# (--ignore-scripts evita el hook "prepare"/husky; luego se compilan los binarios nativos)
+RUN npm install --workspaces --ignore-scripts && npm rebuild && npm cache clean --force
+
+# Dar permisos al usuario node sobre todo el directorio de trabajo
+RUN chown -R node:node /app
+
+# Cambiar a usuario no-root
+USER node
+
+# Puerto por defecto (se sobrescribe en cada servicio)
+EXPOSE 3000
+
+# Comando por defecto (se sobrescribe en cada servicio)
+CMD ["node", "src/index.js"]

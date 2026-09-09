@@ -1,0 +1,14 @@
+server.host: 0.0.0.0
+server.port: 5601
+
+elasticsearch.hosts: ['https://elasticsearch:9200']
+elasticsearch.username: elastic
+elasticsearch.ssl.verificationMode: certificate
+
+xpack.security.enabled: true
+xpack.security.session.timeout: 8h
+
+monitoring.ui.container.elasticsearch.enabled: true
+
+server.cors.enabled: true
+server.cors.origin: ['http://localhost:3000']

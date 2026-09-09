@@ -1,0 +1,329 @@
+name: smartcampus
+
+services:
+  # ======================================================
+  # MySQL 8 con inicialización automática del schema
+  # ======================================================
+  mysql:
+    image: mysql:8.0
+    container_name: uajs-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-uajs206**}
+      MYSQL_DATABASE: uajs_smart_campus
+      MYSQL_USER: ${MYSQL_USER:-uajs_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-uajs206**}
+    ports:
+      - '3307:3306'
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init:/docker-entrypoint-initdb.d:ro
+      - ../../scripts/migrations:/scripts/migrations:ro
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'mysqladmin',
+          'ping',
+          '-h',
+          'localhost',
+          '-u',
+          'root',
+          '-p${MYSQL_ROOT_PASSWORD:-uajs206**}',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - uajs-network
+
+  # ======================================================
+  # Redis 7 con AOF persistente
+  # ======================================================
+  redis:
+    image: redis:7-alpine
+    container_name: uajs-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --appendfsync everysec
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - uajs-network
+
+  # ======================================================
+  # Elasticsearch 8.x — Logging centralizado y búsqueda
+  # ======================================================
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    container_name: uajs-elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=true
+      - ELASTIC_PASSWORD=${ELASTICSEARCH_PASSWORD:-changeme}
+      - xpack.security.http.ssl.enabled=false
+      - xpack.security.transport.ssl.enabled=false
+      - 'ES_JAVA_OPTS=-Xms1g -Xmx1g'
+      - cluster.name=uajs-cluster
+      - bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    ports:
+      - '9200:9200'
+      - '9300:9300'
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "curl -s -u elastic:${ELASTICSEARCH_PASSWORD:-changeme} http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'",
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - uajs-network
+
+  # ======================================================
+  # Kibana — Dashboard de Elasticsearch
+  # ======================================================
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.12.0
+    container_name: uajs-kibana
+    restart: unless-stopped
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - xpack.security.enabled=true
+      - ELASTICSEARCH_USERNAME=elastic
+      - ELASTICSEARCH_PASSWORD=${ELASTICSEARCH_PASSWORD:-changeme}
+    ports:
+      - '5601:5601'
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'curl -s -u elastic:${ELASTICSEARCH_PASSWORD:-changeme} http://localhost:5601/api/status | grep -q ''"overall"''',
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - uajs-network
+
+  # ======================================================
+  # Microservicios implementados (3 de 12)
+  # NOTA: booking, event, notification, pqrs, request,
+  # resource, storage, university y user están VACÍOS
+  # (solo estructura de carpetas, sin código) y no se
+  # levantan hasta que se implementen.
+  # ======================================================
+  api-gateway:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.base
+    image: uajs-base
+    container_name: uajs-api-gateway
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ../../:/app
+      - /app/node_modules
+    command: npx nodemon apps/api-gateway/src/server.js
+    environment:
+      PORT: 3000
+      NODE_ENV: development
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: uajs_smart_campus
+      MYSQL_USER: ${MYSQL_USER:-uajs_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-uajs206**}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-uajs_dev_jwt_secret_1234567890abcdefghijklmnopqrstuvwxyz}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-change_me}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change_me}
+      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN:-uajs_service_token_2024}
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,https://campus.uajs.edu
+      RATE_LIMIT_WINDOW: 60000
+      RATE_LIMIT_MAX: 100
+      ELASTICSEARCH_HOST: elasticsearch
+      ELASTICSEARCH_PORT: '9200'
+      ELASTICSEARCH_USER: elastic
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-changeme}
+      SERVICE_AUTH_URL: http://auth-service:3001
+      SERVICE_USER_URL: http://user-service:3002
+      SERVICE_CATALOG_URL: http://catalog-service:3003
+      SERVICE_UNIVERSITY_URL: http://university-service:3004
+      SERVICE_RESOURCE_URL: http://resource-service:3005
+      SERVICE_BOOKING_URL: http://booking-service:3006
+      SERVICE_REQUEST_URL: http://request-service:3007
+      SERVICE_EVENT_URL: http://event-service:3008
+      SERVICE_NOTIFICATION_URL: http://notification-service:3009
+      SERVICE_PQRS_URL: http://pqrs-service:3010
+      SERVICE_STORAGE_URL: http://storage-service:3011
+    ports:
+      - '3000:3000'
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+      catalog-service:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--no-verbose',
+          '--tries=1',
+          '--spider',
+          'http://localhost:3000/health/liveness',
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - uajs-network
+
+  auth-service:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.base
+    image: uajs-base
+    container_name: uajs-auth
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ../../:/app
+      - /app/node_modules
+    command: npx nodemon apps/auth-service/src/server.js
+    environment:
+      PORT: 3001
+      NODE_ENV: development
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: uajs_auth
+      MYSQL_USER: ${MYSQL_USER:-uajs_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-uajs206**}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-uajs_dev_jwt_secret_1234567890abcdefghijklmnopqrstuvwxyz_extra_long_654321}
+      JWT_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 7d
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-uajs_dev_jwt_access_secret_abcdefghijklmnopqrstuvwxyz_0123456789_extra}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-uajs_dev_jwt_refresh_secret_abcdefghijklmnopqrstuvwxyz_9876543210_largo}
+      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN:-uajs_service_token_2024}
+      ELASTICSEARCH_HOST: elasticsearch
+      ELASTICSEARCH_PORT: '9200'
+      ELASTICSEARCH_USER: elastic
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-changeme}
+    ports:
+      - '3001:3001'
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test:
+        ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3001/healthz']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - uajs-network
+
+  catalog-service:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.base
+    image: uajs-base
+    container_name: uajs-catalog
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ../../:/app
+      - /app/node_modules
+    command: npx nodemon apps/catalog-service/src/server.js
+    environment:
+      PORT: 3003
+      NODE_ENV: development
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: uajs_catalog
+      MYSQL_USER: ${MYSQL_USER:-uajs_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-uajs206**}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN:-uajs_service_token_2024}
+      ELASTICSEARCH_HOST: elasticsearch
+      ELASTICSEARCH_PORT: '9200'
+      ELASTICSEARCH_USER: elastic
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-changeme}
+    ports:
+      - '3003:3003'
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--no-verbose',
+          '--tries=1',
+          '--spider',
+          'http://localhost:3003/api/v1/catalog/health',
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - uajs-network
+
+# ======================================================
+# Volúmenes persistentes
+# ======================================================
+volumes:
+  mysql_data:
+  redis_data:
+  es-data:
+    driver: local
+
+# ======================================================
+# Red interna
+# ======================================================
+networks:
+  uajs-network:
+    driver: bridge
