@@ -132,7 +132,23 @@ class MySQLPool {
   async beginTransaction() {
     const conn = await this.getConnection();
     await conn.beginTransaction();
-    return conn;
+    // Envolver la conexión para normalizar el formato de respuesta:
+    // conn.query nativo devuelve [rows, fields], mientras pool.query
+    // devuelve solo rows. Los repositorios esperan el formato del pool
+    // (result.insertId, rows[0], result.affectedRows).
+    return {
+      query: async (sql, params = []) => {
+        const [results] = await conn.query(sql, params);
+        return results;
+      },
+      execute: async (sql, params = []) => {
+        const [results] = await conn.execute(sql, params);
+        return results;
+      },
+      commit: () => conn.commit(),
+      rollback: () => conn.rollback(),
+      release: () => conn.release(),
+    };
   }
 
   async ping() {
