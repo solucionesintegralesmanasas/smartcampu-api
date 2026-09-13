@@ -28,3 +28,7 @@ services:
   catalog-service:
     environment:
       - NODE_ENV=development
+
+  university-service:
+    environment:
+      - NODE_ENV=development
