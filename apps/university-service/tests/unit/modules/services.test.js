@@ -94,14 +94,6 @@ describe('Pruebas Unitarias de Servicios (Cobertura Integral)', () => {
       });
       mockRepo.findByDocumento.mockResolvedValueOnce({ id: 2 });
       await expect(service.update(1, { numeroDocumento: '456' })).rejects.toThrow(ConflictError);
-
-      mockRepo.findById.mockResolvedValueOnce({
-        id: 1,
-        tipoDocumento: 'CC',
-        numeroDocumento: '123',
-      });
-      mockRepo.findById.mockResolvedValueOnce(null); // empresa no existe
-      await expect(service.update(1, { empresaId: 99 })).rejects.toThrow(NotFoundError);
     });
 
     it('delete cuando no existe lanza NotFoundError', async () => {

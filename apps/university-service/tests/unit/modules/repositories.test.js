@@ -111,10 +111,9 @@ describe('Pruebas Unitarias de Repositorios con MockPool', () => {
       expect(updated).toBeNull();
     });
 
-    it('countAssociatedTerceros debe contar dependencias', async () => {
-      mockPool.query.mockResolvedValueOnce([{ total: 5 }]);
+    it('countAssociatedTerceros retorna 0 sin relación en el esquema', async () => {
       const count = await repo.countAssociatedTerceros(1);
-      expect(count).toBe(5);
+      expect(count).toBe(0);
     });
 
     it('delete debe marcar inactivo el registro', async () => {
@@ -136,9 +135,6 @@ describe('Pruebas Unitarias de Repositorios con MockPool', () => {
           id: 10,
           primerNombre: 'Carlos',
           primerApellido: 'Gómez',
-          empresa_id: 1,
-          empresa_nombre: 'Empresa Test',
-          empresa_nit: '900',
         },
       ]);
 
@@ -147,24 +143,22 @@ describe('Pruebas Unitarias de Repositorios con MockPool', () => {
         numeroDocumento: '12345',
         primerNombre: 'Carlos',
         primerApellido: 'Gómez',
-        empresaId: 1,
       });
 
       expect(created.id).toBe(10);
-      expect(created.Empresa).toBeDefined();
+      expect(created.Empresa).toBeNull();
     });
 
-    it('findAll debe filtrar por tipoDocumento, empresaId y search', async () => {
+    it('findAll debe filtrar por tipoDocumento y search', async () => {
       mockPool.query
         .mockResolvedValueOnce([{ total: 1 }])
-        .mockResolvedValueOnce([{ id: 10, primerNombre: 'Ana', empresa_id: null }]);
+        .mockResolvedValueOnce([{ id: 10, primerNombre: 'Ana' }]);
 
       const res = await repo.findAll({
         page: 1,
         limit: 10,
         search: 'Ana',
         tipoDocumento: 'CC',
-        empresaId: 2,
       });
 
       expect(res.data).toHaveLength(1);

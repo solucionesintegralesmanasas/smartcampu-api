@@ -1,5 +1,5 @@
 const { esClient } = require('../../../src/config/elasticsearch');
-const { ConflictError, NotFoundError } = require('../../../src/core/exceptions');
+const { ConflictError } = require('../../../src/core/exceptions');
 const TerceroController = require('../../../src/modules/tercero/tercero.controller');
 const TerceroService = require('../../../src/modules/tercero/tercero.service');
 
@@ -41,24 +41,23 @@ describe('Módulo Tercero (Unit Tests)', () => {
   });
 
   describe('TerceroService.create e indexación con relaciones en ES', () => {
-    it('debe crear un tercero e indexarlo en Elasticsearch con relaciones hacia Empresa', async () => {
+    it('debe crear un tercero e indexarlo en Elasticsearch', async () => {
       const dto = {
         tipoDocumento: 'CC',
         numeroDocumento: '1098765432',
         primerNombre: 'Carlos',
         primerApellido: 'Rodríguez',
-        empresaId: 5,
         email: 'carlos@empresa.com',
       };
 
       mockTerceroRepo.findByDocumento.mockResolvedValue(null);
-      mockEmpresaRepo.findById.mockResolvedValue({ id: 5, legalName: 'Aliados S.A.S.' });
 
       const createdTercero = {
         id: 10,
         ...dto,
         activo: 1,
-        Empresa: { id: 5, nombre: 'Aliados S.A.S.' },
+        Empresa: null,
+        empresa: null,
       };
       mockTerceroRepo.create.mockResolvedValue(createdTercero);
       const esIndexSpy = jest.spyOn(esClient.client, 'index').mockResolvedValue({ body: {} });
@@ -73,13 +72,7 @@ describe('Módulo Tercero (Unit Tests)', () => {
           body: expect.objectContaining({
             type: 'tercero',
             id: 10,
-            relaciones: [
-              {
-                type: 'empresa',
-                id: 5,
-                nombre: 'Aliados S.A.S.',
-              },
-            ],
+            relaciones: [],
           }),
         }),
       );
@@ -91,19 +84,6 @@ describe('Módulo Tercero (Unit Tests)', () => {
       await expect(
         terceroService.create({ tipoDocumento: 'CC', numeroDocumento: '1098765432' }),
       ).rejects.toThrow(ConflictError);
-    });
-
-    it('debe lanzar NotFoundError si la empresaId referenciada no existe', async () => {
-      mockTerceroRepo.findByDocumento.mockResolvedValue(null);
-      mockEmpresaRepo.findById.mockResolvedValue(null);
-
-      await expect(
-        terceroService.create({
-          tipoDocumento: 'CC',
-          numeroDocumento: '1098765432',
-          empresaId: 999,
-        }),
-      ).rejects.toThrow(NotFoundError);
     });
   });
 
