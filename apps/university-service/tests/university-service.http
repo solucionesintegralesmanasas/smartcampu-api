@@ -1,0 +1,307 @@
+### ==============================================================================
+### MICROSERVICIO UNIVERSITARIO (UNIVERSITY-SERVICE) - COLECCIÓN HTTP ENTERPRISE
+### Base de Datos MySQL: uajs_academic / uajs_auth | Clave DB por defecto: uajs206**
+### ==============================================================================
+
+@serviceUrl = http://localhost:3004
+@gatewayUrl = http://localhost:3000
+@contentType = application/json
+@dbUser = uajs_user
+@dbPassword = uajs206**
+
+### ------------------------------------------------------------------------------
+### 1. HEALTH CHECKS & DOCUMENTACIÓN
+### ------------------------------------------------------------------------------
+
+### 1.1 Healthcheck básico del microservicio
+GET {{serviceUrl}}/healthz
+Accept: {{contentType}}
+
+### 1.2 Healthcheck detallado de API v1
+GET {{serviceUrl}}/api/v1/universidad/health
+Accept: {{contentType}}
+
+### 1.3 Healthcheck a través de API Gateway
+GET {{gatewayUrl}}/api/v1/universidad/health
+Accept: {{contentType}}
+
+### 1.4 Documentación OpenAPI Swagger interactiva
+GET {{serviceUrl}}/api/docs/
+Accept: text/html
+
+### ------------------------------------------------------------------------------
+### 2. MÓDULO EMPRESAS (COMPANIES)
+### ------------------------------------------------------------------------------
+
+### 2.1 Crear nueva empresa
+# @name crearEmpresa
+POST {{serviceUrl}}/api/v1/universidad/empresas
+Content-Type: {{contentType}}
+
+{
+  "razonSocial": "Soluciones Integrales Manas SAS",
+  "nombreComercial": "Manas Corp",
+  "nit": "901234567-8",
+  "direccion": "Calle 72 # 11-45, Bogotá",
+  "telefono": "+57 300 123 4567",
+  "email": "contacto@manascorp.com",
+  "nombreCiudad": "Bogotá",
+  "activo": true
+}
+
+### 2.2 Listar empresas paginadas
+GET {{serviceUrl}}/api/v1/universidad/empresas?page=1&limit=10
+Accept: {{contentType}}
+
+### 2.3 Obtener empresa por ID
+GET {{serviceUrl}}/api/v1/universidad/empresas/1
+Accept: {{contentType}}
+
+### 2.4 Búsqueda difusa en Elasticsearch (Empresas)
+GET {{serviceUrl}}/api/v1/universidad/empresas/search?search=Manas
+Accept: {{contentType}}
+
+### 2.5 Actualizar empresa
+PUT {{serviceUrl}}/api/v1/universidad/empresas/1
+Content-Type: {{contentType}}
+
+{
+  "nombreComercial": "Manas Global Solutions",
+  "telefono": "+57 300 987 6543"
+}
+
+### 2.6 Eliminar empresa (Integridad referencial: falla si tiene terceros vinculados)
+DELETE {{serviceUrl}}/api/v1/universidad/empresas/1
+Accept: {{contentType}}
+
+### ------------------------------------------------------------------------------
+### 3. MÓDULO TERCEROS / PERSONAS (PERSONS)
+### ------------------------------------------------------------------------------
+
+### 3.1 Crear nueva persona / tercero
+# @name crearTercero
+POST {{serviceUrl}}/api/v1/universidad/terceros
+Content-Type: {{contentType}}
+
+{
+  "tipoDocumento": "CC",
+  "numeroDocumento": "1020304050",
+  "primerNombre": "Carlos",
+  "segundoNombre": "Eduardo",
+  "primerApellido": "Pérez",
+  "segundoApellido": "Gómez",
+  "fechaNacimiento": "1995-05-20",
+  "genero": "M",
+  "email": "carlos.perez@uajs.edu.co",
+  "telefono": "3104567890",
+  "direccion": "Carrera 15 # 85-30, Bogotá",
+  "nombreCiudad": "Bogotá",
+  "activo": true
+}
+
+### 3.2 Listar personas / terceros
+GET {{serviceUrl}}/api/v1/universidad/terceros?page=1&limit=10
+Accept: {{contentType}}
+
+### 3.3 Obtener persona por ID
+GET {{serviceUrl}}/api/v1/universidad/terceros/1
+Accept: {{contentType}}
+
+### 3.4 Búsqueda en Elasticsearch (Terceros)
+GET {{serviceUrl}}/api/v1/universidad/terceros/search?search=Perez
+Accept: {{contentType}}
+
+### 3.5 Actualizar persona
+PUT {{serviceUrl}}/api/v1/universidad/terceros/1
+Content-Type: {{contentType}}
+
+{
+  "telefono": "3159876543",
+  "direccion": "Calle 100 # 19-61"
+}
+
+### 3.6 Eliminar persona (Falla si tiene registro activo de estudiante o docente)
+DELETE {{serviceUrl}}/api/v1/universidad/terceros/1
+Accept: {{contentType}}
+
+### ------------------------------------------------------------------------------
+### 4. MÓDULO FACULTADES (FACULTIES)
+### ------------------------------------------------------------------------------
+
+### 4.1 Crear nueva facultad
+# @name crearFacultad
+POST {{serviceUrl}}/api/v1/universidad/facultades
+Content-Type: {{contentType}}
+
+{
+  "campusId": 1,
+  "codigo": "FING",
+  "nombre": "Facultad de Ingeniería y Ciencias Aplicadas",
+  "nombreDecano": "Dra. Martha Ramírez",
+  "email": "decanatura.ingenieria@uajs.edu.co",
+  "activo": true
+}
+
+### 4.2 Listar facultades
+GET {{serviceUrl}}/api/v1/universidad/facultades?page=1&limit=10
+Accept: {{contentType}}
+
+### 4.3 Obtener facultad por ID
+GET {{serviceUrl}}/api/v1/universidad/facultades/1
+Accept: {{contentType}}
+
+### 4.4 Búsqueda en Elasticsearch (Facultades)
+GET {{serviceUrl}}/api/v1/universidad/facultades/search?search=Ingenieria
+Accept: {{contentType}}
+
+### 4.5 Actualizar facultad
+PUT {{serviceUrl}}/api/v1/universidad/facultades/1
+Content-Type: {{contentType}}
+
+{
+  "nombreDecano": "Dr. Fernando Morales"
+}
+
+### 4.6 Eliminar facultad (Falla si tiene programas o docentes asociados)
+DELETE {{serviceUrl}}/api/v1/universidad/facultades/1
+Accept: {{contentType}}
+
+### ------------------------------------------------------------------------------
+### 5. MÓDULO PROGRAMAS ACADÉMICOS (PROGRAMS)
+### ------------------------------------------------------------------------------
+
+### 5.1 Crear nuevo programa académico
+# @name crearPrograma
+POST {{serviceUrl}}/api/v1/universidad/programas
+Content-Type: {{contentType}}
+
+{
+  "facultadId": 1,
+  "codigo": "PRG-SIS",
+  "nombre": "Ingeniería de Sistemas y Computación",
+  "nivel": "undergraduate",
+  "duracionSemestres": 10,
+  "creditosTotales": 160,
+  "codigoSnies": "102345",
+  "activo": true
+}
+
+### 5.2 Listar programas académicos
+GET {{serviceUrl}}/api/v1/universidad/programas?page=1&limit=10
+Accept: {{contentType}}
+
+### 5.3 Obtener programa por ID
+GET {{serviceUrl}}/api/v1/universidad/programas/1
+Accept: {{contentType}}
+
+### 5.4 Búsqueda en Elasticsearch (Programas)
+GET {{serviceUrl}}/api/v1/universidad/programas/search?search=Sistemas
+Accept: {{contentType}}
+
+### 5.5 Actualizar programa académico
+PUT {{serviceUrl}}/api/v1/universidad/programas/1
+Content-Type: {{contentType}}
+
+{
+  "duracionSemestres": 9,
+  "creditosTotales": 150
+}
+
+### 5.6 Eliminar programa (Falla si tiene estudiantes matriculados)
+DELETE {{serviceUrl}}/api/v1/universidad/programas/1
+Accept: {{contentType}}
+
+### ------------------------------------------------------------------------------
+### 6. MÓDULO ESTUDIANTES (STUDENTS)
+### NOTA: Al crear un estudiante, se crea automáticamente su usuario en uajs_auth.users
+###       con el rol 'STUDENT' y la clave uajs206** (o la indicada en "password").
+### ------------------------------------------------------------------------------
+
+### 6.1 Matricular estudiante (Provisión automática de usuario con rol STUDENT)
+# @name crearEstudiante
+POST {{serviceUrl}}/api/v1/universidad/estudiantes
+Content-Type: {{contentType}}
+
+{
+  "personaId": 1,
+  "programaId": 1,
+  "codigoEstudiante": "EST-2026-0001",
+  "fechaMatricula": "2026-01-15",
+  "semestreActual": 1,
+  "promedio": 4.5,
+  "estado": "active",
+  "password": "uajs206**",
+  "activo": true
+}
+
+### 6.2 Listar estudiantes paginados
+GET {{serviceUrl}}/api/v1/universidad/estudiantes?page=1&limit=10
+Accept: {{contentType}}
+
+### 6.3 Obtener estudiante por ID
+GET {{serviceUrl}}/api/v1/universidad/estudiantes/1
+Accept: {{contentType}}
+
+### 6.4 Búsqueda en Elasticsearch (Estudiantes)
+GET {{serviceUrl}}/api/v1/universidad/estudiantes/search?search=EST-2026
+Accept: {{contentType}}
+
+### 6.5 Actualizar estudiante
+PUT {{serviceUrl}}/api/v1/universidad/estudiantes/1
+Content-Type: {{contentType}}
+
+{
+  "semestreActual": 2,
+  "promedio": 4.7
+}
+
+### 6.6 Eliminar estudiante (Soft delete y desindexación de ES)
+DELETE {{serviceUrl}}/api/v1/universidad/estudiantes/1
+Accept: {{contentType}}
+
+### ------------------------------------------------------------------------------
+### 7. MÓDULO DOCENTES / PROFESORES (TEACHERS)
+### NOTA: Al crear un docente, se crea automáticamente su usuario en uajs_auth.users
+###       con el rol 'TEACHER' y la clave uajs206** (o la indicada en "password").
+### ------------------------------------------------------------------------------
+
+### 7.1 Registrar docente (Provisión automática de usuario con rol TEACHER)
+# @name crearDocente
+POST {{serviceUrl}}/api/v1/universidad/docentes
+Content-Type: {{contentType}}
+
+{
+  "personaId": 1,
+  "facultadId": 1,
+  "codigoDocente": "DOC-2026-0001",
+  "tipoContrato": "full_time",
+  "fechaContratacion": "2026-01-10",
+  "tituloAcademico": "Doctorado en Ciencias de la Computación",
+  "estado": "active",
+  "password": "uajs206**",
+  "activo": true
+}
+
+### 7.2 Listar docentes paginados
+GET {{serviceUrl}}/api/v1/universidad/docentes?page=1&limit=10
+Accept: {{contentType}}
+
+### 7.3 Obtener docente por ID
+GET {{serviceUrl}}/api/v1/universidad/docentes/1
+Accept: {{contentType}}
+
+### 7.4 Búsqueda en Elasticsearch (Docentes)
+GET {{serviceUrl}}/api/v1/universidad/docentes/search?search=DOC-2026
+Accept: {{contentType}}
+
+### 7.5 Actualizar docente
+PUT {{serviceUrl}}/api/v1/universidad/docentes/1
+Content-Type: {{contentType}}
+
+{
+  "tituloAcademico": "Ph.D. & Postdoctorado en Inteligencia Artificial"
+}
+
+### 7.6 Eliminar docente (Soft delete y desindexación de ES)
+DELETE {{serviceUrl}}/api/v1/universidad/docentes/1
+Accept: {{contentType}}
