@@ -52,12 +52,7 @@ class ArchivoRepository {
   }
 
   async findAll({
-    page = 1,
-    limit = 20,
-    usuarioId,
-    tipo,
-    entidad,
-    activo,
+    page = 1, limit = 20, usuarioId, tipo, entidad, activo,
   }) {
     const pool = await this.getPool();
     const offset = (page - 1) * limit;
@@ -180,10 +175,7 @@ class ArchivoRepository {
       if (fields.length > 0) {
         fields.push('updatedAt = NOW()');
         params.push(id);
-        await conn.query(
-          `UPDATE archivos SET ${fields.join(', ')} WHERE id = ?`,
-          params,
-        );
+        await conn.query(`UPDATE archivos SET ${fields.join(', ')} WHERE id = ?`, params);
       }
 
       await conn.commit();
@@ -205,10 +197,7 @@ class ArchivoRepository {
         throw new NotFoundError('Archivo no encontrado');
       }
 
-      await conn.query(
-        'UPDATE archivos SET deleted_at = NOW(), activo = 0 WHERE id = ?',
-        [id],
-      );
+      await conn.query('UPDATE archivos SET deleted_at = NOW(), activo = 0 WHERE id = ?', [id]);
 
       await conn.commit();
       return { success: true };
@@ -221,17 +210,31 @@ class ArchivoRepository {
   }
 
   async searchInElasticsearch(query) {
+    const searchTerm = query.search || '';
     const response = await esClient.search({
       index: env.STORAGE_INDEX,
       query: {
         bool: {
           must: [
             {
-              multi_match: {
-                query: query.search,
-                fields: ['nombre_original', 'nombre_sistema', 'carpeta'],
-                type: 'best_fields',
-                fuzziness: 'AUTO',
+              bool: {
+                should: [
+                  {
+                    multi_match: {
+                      query: searchTerm,
+                      fields: ['nombre_original', 'nombre_sistema', 'carpeta'],
+                      type: 'best_fields',
+                      fuzziness: 'AUTO',
+                    },
+                  },
+                  {
+                    wildcard: { nombre_original: `*${searchTerm.toLowerCase()}*` },
+                  },
+                  {
+                    wildcard: { nombre_sistema: `*${searchTerm.toLowerCase()}*` },
+                  },
+                ],
+                minimum_should_match: 1,
               },
             },
           ],
