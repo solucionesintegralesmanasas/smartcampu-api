@@ -53,3 +53,6 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+
+# Documentos de generacion (no versionar)
+docs/uajs-smart-campus-16-prompts-de-generación-v2-1-enterprise-grade-con-elasticsearch.md
