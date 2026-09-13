@@ -36,7 +36,7 @@ class FacultadRepository {
     const campusId = data.campusId || data.campus_id || 1;
     const code = data.codigo || data.code;
     const name = data.nombre || data.name;
-    const deanName = data.decano || data.dean_name || null;
+    const deanName = data.decano ?? data.nombreDecano ?? data.dean_name ?? null;
     const email = data.email || null;
     let isActive = 1;
     if (data.activo !== undefined) {
@@ -156,7 +156,12 @@ class FacultadRepository {
     const campusId = data.campusId !== undefined ? data.campusId : existing.campusId;
     const code = data.codigo !== undefined ? data.codigo : existing.codigo;
     const name = data.nombre !== undefined ? data.nombre : existing.nombre;
-    const deanName = data.decano !== undefined ? data.decano : existing.decano;
+    let deanName = existing.decano;
+    if (data.decano !== undefined) {
+      deanName = data.decano;
+    } else if (data.nombreDecano !== undefined) {
+      deanName = data.nombreDecano;
+    }
     const email = data.email !== undefined ? data.email : existing.email;
     let isActive = existing.activo;
     if (data.activo !== undefined) {

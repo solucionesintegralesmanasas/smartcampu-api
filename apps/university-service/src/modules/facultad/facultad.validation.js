@@ -9,6 +9,7 @@ const createFacultadSchema = z.object({
   codigo: z.string().min(2, 'El código debe tener al menos 2 caracteres').max(20),
   nombre: z.string().min(2, 'El nombre debe tener al menos 2 caracteres').max(150),
   decano: z.string().max(100).optional().nullable(),
+  nombreDecano: z.string().max(100).optional().nullable(),
   email: z.string().email('Correo electrónico no válido').optional().nullable(),
   activo: z.boolean().default(true),
 });
@@ -18,6 +19,7 @@ const updateFacultadSchema = z.object({
   codigo: z.string().min(2).max(20).optional(),
   nombre: z.string().min(2).max(150).optional(),
   decano: z.string().max(100).optional().nullable(),
+  nombreDecano: z.string().max(100).optional().nullable(),
   email: z.string().email().optional().nullable(),
   activo: z.boolean().optional(),
 });

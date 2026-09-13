@@ -10,6 +10,7 @@ const createEmpresaSchema = z.object({
   email: z.string().email('El correo electrónico no es válido').optional().nullable(),
   cityUuid: z.string().uuid().optional().nullable(),
   cityName: z.string().max(100).optional().nullable(),
+  nombreCiudad: z.string().max(100).optional().nullable(),
   activo: z.boolean().default(true),
 });
 
@@ -23,6 +24,7 @@ const updateEmpresaSchema = z.object({
   email: z.string().email().optional().nullable(),
   cityUuid: z.string().uuid().optional().nullable(),
   cityName: z.string().max(100).optional().nullable(),
+  nombreCiudad: z.string().max(100).optional().nullable(),
   activo: z.boolean().optional(),
 });
 
