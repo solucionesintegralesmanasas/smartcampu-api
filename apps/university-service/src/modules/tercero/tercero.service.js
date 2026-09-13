@@ -20,13 +20,6 @@ class TerceroService {
       );
     }
 
-    if (createDto.empresaId && this.empresaRepository) {
-      const empresa = await this.empresaRepository.findById(createDto.empresaId);
-      if (!empresa) {
-        throw new NotFoundError(`La empresa con ID ${createDto.empresaId} no existe`);
-      }
-    }
-
     const tercero = await this.terceroRepository.withTransaction(async (conn) => {
       const created = await this.terceroRepository.create(createDto, conn);
       return created;
@@ -57,11 +50,13 @@ class TerceroService {
 
     if (tercero.Empresa || tercero.empresa) {
       const emp = tercero.Empresa || tercero.empresa;
-      indexData.relaciones.push({
-        type: 'empresa',
-        id: tercero.empresaId || emp.id,
-        nombre: emp.nombre || emp.razonSocial,
-      });
+      if (emp && emp.id) {
+        indexData.relaciones.push({
+          type: 'empresa',
+          id: emp.id,
+          nombre: emp.nombre || emp.razonSocial,
+        });
+      }
     }
 
     try {
@@ -122,10 +117,9 @@ class TerceroService {
     const limit = options.limit || 20;
     const search = options.search || '';
     const tipoDocumento = options.tipoDocumento || '';
-    const empresaId = options.empresaId || '';
-    const cacheKey = `tercero:all:${page}:${limit}:${search}:${tipoDocumento}:${empresaId}`;
+    const cacheKey = `tercero:all:${page}:${limit}:${search}:${tipoDocumento}`;
 
-    if (this.redisClient && !search && !tipoDocumento && !empresaId) {
+    if (this.redisClient && !search && !tipoDocumento) {
       try {
         const cached = await this.redisClient.get(cacheKey);
         if (cached) return JSON.parse(cached);
@@ -139,10 +133,9 @@ class TerceroService {
       limit,
       search,
       tipoDocumento,
-      empresaId,
     });
 
-    if (this.redisClient && !search && !tipoDocumento && !empresaId) {
+    if (this.redisClient && !search && !tipoDocumento) {
       try {
         await this.redisClient.set(cacheKey, JSON.stringify(result), env.UNIVERSITY_CACHE_TTL);
       } catch (err) {
@@ -195,13 +188,6 @@ class TerceroService {
       const duplicate = await this.terceroRepository.findByDocumento(docType, docNum);
       if (duplicate && duplicate.id !== existing.id) {
         throw new ConflictError(`El documento ${docType} ${docNum} ya está registrado`);
-      }
-    }
-
-    if (updateDto.empresaId && this.empresaRepository) {
-      const empresa = await this.empresaRepository.findById(updateDto.empresaId);
-      if (!empresa) {
-        throw new NotFoundError(`La empresa con ID ${updateDto.empresaId} no existe`);
       }
     }
 

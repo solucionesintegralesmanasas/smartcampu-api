@@ -12,9 +12,8 @@ const PERSON_SELECT_FIELDS = `
          p.last_name, ' ', IFNULL(p.second_last_name, '')) AS nombre,
   p.date_of_birth AS fechaNacimiento, p.gender AS genero, p.email,
   p.phone AS telefono, p.address AS direccion, p.city_uuid AS cityUuid,
-  p.city_name AS cityName, p.company_id AS empresaId, p.is_active AS activo,
-  p.created_at AS createdAt, p.updated_at AS updatedAt,
-  c.id AS empresa_id, c.legal_name AS empresa_nombre, c.tax_id AS empresa_nit
+  p.city_name AS cityName, p.is_active AS activo,
+  p.created_at AS createdAt, p.updated_at AS updatedAt
 `;
 
 const keep = (value, fallback) => (value !== undefined ? value : fallback);
@@ -61,9 +60,8 @@ class TerceroRepository {
     const email = data.email || null;
     const phone = data.telefono || data.phone || null;
     const address = data.direccion || data.address || null;
-    const cityUuid = data.cityUuid || data.city_uuid || null;
-    const cityName = data.cityName || data.city_name || null;
-    const companyId = data.empresaId || data.company_id || null;
+    const cityUuid = data.cityUuid || data.city_uuid || data.ciudadUuid || null;
+    const cityName = data.cityName || data.city_name || data.nombreCiudad || null;
     let isActive = 1;
     if (data.activo !== undefined) {
       isActive = data.activo ? 1 : 0;
@@ -73,8 +71,8 @@ class TerceroRepository {
       `INSERT INTO persons 
        (uuid, document_type_code, document_number, check_digit, first_name, middle_name,
         last_name, second_last_name, date_of_birth, gender, email, phone, address,
-        city_uuid, city_name, company_id, is_active)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        city_uuid, city_name, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         uuid,
         docType,
@@ -91,7 +89,6 @@ class TerceroRepository {
         address,
         cityUuid,
         cityName,
-        companyId,
         isActive,
       ],
     );
@@ -100,7 +97,7 @@ class TerceroRepository {
   }
 
   async findAll({
-    page = 1, limit = 20, search, tipoDocumento, empresaId,
+    page = 1, limit = 20, search, tipoDocumento,
   } = {}) {
     const pool = this.getPool();
     const offset = (page - 1) * limit;
@@ -113,7 +110,6 @@ class TerceroRepository {
     let dataSql = `
       SELECT ${PERSON_SELECT_FIELDS}
       FROM persons p
-      LEFT JOIN companies c ON p.company_id = c.id
       WHERE p.is_active = 1 AND p.deleted_at IS NULL
     `;
     const params = [];
@@ -134,13 +130,6 @@ class TerceroRepository {
       dataSql += ' AND p.document_type_code = ?';
       countParams.push(tipoDocumento);
       params.push(tipoDocumento);
-    }
-
-    if (empresaId) {
-      countSql += ' AND p.company_id = ?';
-      dataSql += ' AND p.company_id = ?';
-      countParams.push(empresaId);
-      params.push(empresaId);
     }
 
     dataSql += ' ORDER BY p.id DESC LIMIT ? OFFSET ?';
@@ -166,7 +155,6 @@ class TerceroRepository {
     const rows = await executor.query(
       `SELECT ${PERSON_SELECT_FIELDS}
       FROM persons p
-      LEFT JOIN companies c ON p.company_id = c.id
       WHERE ${queryField} = ? AND p.deleted_at IS NULL LIMIT 1`,
       [id],
     );
@@ -179,7 +167,6 @@ class TerceroRepository {
     const rows = await executor.query(
       `SELECT ${PERSON_SELECT_FIELDS}
       FROM persons p
-      LEFT JOIN companies c ON p.company_id = c.id
       WHERE p.document_type_code = ? AND p.document_number = ? AND p.deleted_at IS NULL LIMIT 1`,
       [tipoDocumento, numeroDocumento],
     );
@@ -204,9 +191,8 @@ class TerceroRepository {
     const email = keep(data.email, existing.email);
     const phone = keep(data.telefono, existing.telefono);
     const address = keep(data.direccion, existing.direccion);
-    const cityUuid = keep(data.cityUuid, existing.cityUuid);
-    const cityName = keep(data.cityName, existing.cityName);
-    const companyId = keep(data.empresaId, existing.empresaId);
+    const cityUuid = keep(data.cityUuid ?? data.ciudadUuid, existing.cityUuid);
+    const cityName = keep(data.cityName ?? data.nombreCiudad, existing.cityName);
     let isActive = existing.activo;
     if (data.activo !== undefined) {
       isActive = data.activo ? 1 : 0;
@@ -217,7 +203,7 @@ class TerceroRepository {
        SET document_type_code = ?, document_number = ?, check_digit = ?, first_name = ?,
            middle_name = ?, last_name = ?, second_last_name = ?, date_of_birth = ?,
            gender = ?, email = ?, phone = ?, address = ?, city_uuid = ?, city_name = ?,
-           company_id = ?, is_active = ?
+           is_active = ?
        WHERE id = ?`,
       [
         docType,
@@ -234,7 +220,6 @@ class TerceroRepository {
         address,
         cityUuid,
         cityName,
-        companyId,
         isActive,
         existing.id,
       ],
@@ -271,26 +256,11 @@ class TerceroRepository {
   }
 
   formatPersonRow(row) {
-    const {
-      empresa_id: empresaId,
-      empresa_nombre: empresaNombre,
-      empresa_nit: empresaNit,
-      ...personData
-    } = row;
+    const personData = { ...row };
 
     personData.nombre = (personData.nombre || '').replace(/\s+/g, ' ').trim();
-
-    if (empresaId) {
-      personData.Empresa = {
-        id: empresaId,
-        nombre: empresaNombre,
-        nit: empresaNit,
-      };
-      personData.empresa = personData.Empresa;
-    } else {
-      personData.Empresa = null;
-      personData.empresa = null;
-    }
+    personData.Empresa = null;
+    personData.empresa = null;
 
     return personData;
   }

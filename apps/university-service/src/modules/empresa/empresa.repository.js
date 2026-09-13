@@ -43,7 +43,7 @@ class EmpresaRepository {
     const phone = data.telefono || data.phone || null;
     const email = data.email || null;
     const cityUuid = data.cityUuid || data.city_uuid || null;
-    const cityName = data.cityName || data.city_name || null;
+    const cityName = data.cityName || data.city_name || data.nombreCiudad || null;
     let isActive = 1;
     if (data.activo !== undefined) {
       isActive = data.activo ? 1 : 0;
@@ -160,7 +160,7 @@ class EmpresaRepository {
     const phone = keep(data.telefono, existing.telefono);
     const email = keep(data.email, existing.email);
     const cityUuid = keep(data.cityUuid, existing.cityUuid);
-    const cityName = keep(data.cityName, existing.cityName);
+    const cityName = keep(data.cityName ?? data.nombreCiudad, existing.cityName);
     let isActive = existing.activo;
     if (data.activo !== undefined) {
       isActive = data.activo ? 1 : 0;
@@ -189,13 +189,11 @@ class EmpresaRepository {
     return this.findById(existing.id, conn);
   }
 
-  async countAssociatedTerceros(empresaId, conn = null) {
-    const executor = conn || this.getPool();
-    const rows = await executor.query(
-      'SELECT COUNT(*) AS total FROM persons WHERE company_id = ? AND is_active = 1',
-      [empresaId],
-    );
-    return rows[0]?.total || 0;
+  async countAssociatedTerceros() {
+    // La tabla persons no tiene relación con companies en el esquema actual,
+    // por lo que no existen terceros asociados. Se conserva el método por
+    // compatibilidad de la capa de servicio.
+    return 0;
   }
 
   async delete(id, conn = null) {

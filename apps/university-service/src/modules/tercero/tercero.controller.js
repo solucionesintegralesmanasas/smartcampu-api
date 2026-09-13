@@ -15,14 +15,13 @@ class TerceroController {
   async findAll(req, res, next) {
     try {
       const {
-        page = 1, limit = 20, search, tipoDocumento, empresaId,
+        page = 1, limit = 20, search, tipoDocumento,
       } = req.query;
       const result = await this.terceroService.findAll({
         page: parseInt(page, 10),
         limit: parseInt(limit, 10),
         search,
         tipoDocumento,
-        empresaId: empresaId ? parseInt(empresaId, 10) : undefined,
       });
       res.status(200).json({
         success: true,

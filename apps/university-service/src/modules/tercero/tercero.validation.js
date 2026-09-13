@@ -19,8 +19,7 @@ const createTerceroSchema = z.object({
   direccion: z.string().max(200).optional().nullable(),
   cityUuid: z.string().uuid().optional().nullable(),
   cityName: z.string().max(100).optional().nullable(),
-  empresaId: z.coerce.number().int().positive().optional()
-    .nullable(),
+  nombreCiudad: z.string().max(100).optional().nullable(),
   activo: z.boolean().default(true),
 });
 
@@ -43,8 +42,7 @@ const updateTerceroSchema = z.object({
   direccion: z.string().max(200).optional().nullable(),
   cityUuid: z.string().uuid().optional().nullable(),
   cityName: z.string().max(100).optional().nullable(),
-  empresaId: z.coerce.number().int().positive().optional()
-    .nullable(),
+  nombreCiudad: z.string().max(100).optional().nullable(),
   activo: z.boolean().optional(),
 });
 
@@ -54,7 +52,6 @@ const queryTerceroSchema = z.object({
     .default(20),
   search: z.string().optional(),
   tipoDocumento: z.string().optional(),
-  empresaId: z.coerce.number().int().positive().optional(),
 });
 
 module.exports = {
