@@ -247,10 +247,23 @@ class EstudianteService {
                 ...(searchTerm
                   ? [
                     {
-                      multi_match: {
-                        query: searchTerm,
-                        fields: ['nombre', 'codigo', 'numeroDocumento', 'email'],
-                        fuzziness: 'AUTO',
+                      bool: {
+                        should: [
+                          {
+                            multi_match: {
+                              query: searchTerm,
+                              fields: ['nombre', 'codigo', 'numeroDocumento', 'email'],
+                              fuzziness: 'AUTO',
+                            },
+                          },
+                          {
+                            wildcard: { codigo: `*${searchTerm}*` },
+                          },
+                          {
+                            wildcard: { numeroDocumento: `*${searchTerm}*` },
+                          },
+                        ],
+                        minimum_should_match: 1,
                       },
                     },
                   ]
