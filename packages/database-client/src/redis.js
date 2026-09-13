@@ -78,6 +78,14 @@ class RedisClient {
     return this.breaker.fire('del', key);
   }
 
+  async keys(pattern) {
+    return this.breaker.fire('keys', pattern);
+  }
+
+  async scan(cursor = '0', ...args) {
+    return this.breaker.fire('scan', cursor, ...args);
+  }
+
   async ping() {
     try {
       return (await this.breaker.fire('ping')) === 'PONG';
