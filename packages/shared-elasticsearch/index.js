@@ -54,6 +54,7 @@ const templates = require('./src/templates/searchTemplates');
 module.exports = {
   ElasticsearchClient,
   createElasticsearchClient,
+  createResilientElasticsearchClient: createElasticsearchClient,
   pingElasticsearch,
   createIndex,
   USER_INDEX,
