@@ -1,0 +1,469 @@
+openapi: 3.0.3
+info:
+  title: Storage Service API
+  description: API para gestión de almacenamiento seguro de archivos con indexación en Elasticsearch
+  version: 1.0.0
+  contact:
+    name: UAJS Team
+    email: team@uajs.com
+servers:
+  - url: http://localhost:3011/api/v1/storage
+    description: Development server
+tags:
+  - name: Archivos
+    description: Operaciones de gestión de archivos
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    FileUploadResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/File'
+    File:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        uuid:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        nombre_original:
+          type: string
+          example: "documento.pdf"
+        nombre_sistema:
+          type: string
+          example: "550e8400-e29b-41d4-a716-446655440000.pdf"
+        ruta_acceso:
+          type: string
+          example: "/uploads/550e8400-e29b-41d4-a716-446655440000.pdf"
+        mime_type:
+          type: string
+          example: "application/pdf"
+        peso_bytes:
+          type: integer
+          example: 1024000
+        entidad_asociada:
+          type: string
+          nullable: true
+          example: "evento"
+        uuid_asociado:
+          type: string
+          format: uuid
+          nullable: true
+          example: "660e8400-e29b-41d4-a716-446655440000"
+        subido_por:
+          type: integer
+          nullable: true
+          example: 1
+        subido_por_nombre:
+          type: string
+          nullable: true
+          example: "Juan Pérez"
+        extension:
+          type: string
+          example: ".pdf"
+        carpeta:
+          type: string
+          example: "general"
+        publico:
+          type: boolean
+          example: false
+        activo:
+          type: boolean
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    FileListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/File'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                page:
+                  type: integer
+                  example: 1
+                limit:
+                  type: integer
+                  example: 20
+                total:
+                  type: integer
+                  example: 100
+                totalPages:
+                  type: integer
+                  example: 5
+                hasNextPage:
+                  type: boolean
+                  example: true
+                hasPrevPage:
+                  type: boolean
+                  example: false
+    SearchResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/File'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                total:
+                  type: integer
+                  example: 50
+                limit:
+                  type: integer
+                  example: 20
+                offset:
+                  type: integer
+                  example: 0
+                hasNextPage:
+                  type: boolean
+                  example: true
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: "Error message"
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              code:
+                type: string
+              message:
+                type: string
+              path:
+                type: array
+                items:
+                  type: string
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 20
+        minimum: 1
+        maximum: 100
+    SearchParam:
+      name: q
+      in: query
+      schema:
+        type: string
+        minLength: 1
+      description: Término de búsqueda
+paths:
+  /upload:
+    post:
+      tags:
+        - Archivos
+      summary: Subir un archivo
+      description: Sube un archivo con validación de extensiones permitidas (PDF, JPG, JPEG, PNG, GIF) y tamaño máximo de 10MB
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Archivo a subir
+                entidadAsociada:
+                  type: string
+                  description: Entidad asociada al archivo
+                uuidAsociado:
+                  type: string
+                  format: uuid
+                  description: UUID de la entidad asociada
+                carpeta:
+                  type: string
+                  default: "general"
+                  description: Carpeta donde se almacenará
+                publico:
+                  type: boolean
+                  default: false
+                  description: Si el archivo es público
+      responses:
+        '201':
+          description: Archivo subido exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileUploadResponse'
+        '400':
+          description: Error de validación (tipo de archivo no permitido, tamaño excedido)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: No autorizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /search:
+    get:
+      tags:
+        - Archivos
+      summary: Buscar archivos en Elasticsearch
+      description: Búsqueda full-text en archivos indexados con filtros opcionales
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SearchParam'
+        - name: usuarioId
+          in: query
+          schema:
+            type: integer
+          description: Filtrar por ID de usuario que subió
+        - name: tipo
+          in: query
+          schema:
+            type: string
+          description: Filtrar por tipo MIME
+        - name: entidad
+          in: query
+          schema:
+            type: string
+          description: Filtrar por entidad asociada
+        - name: activo
+          in: query
+          schema:
+            type: boolean
+          description: Filtrar por estado activo
+        - $ref: '#/components/parameters/LimitParam'
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+      responses:
+        '200':
+          description: Resultados de búsqueda
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+        '400':
+          description: Parámetro de búsqueda requerido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /:
+    get:
+      tags:
+        - Archivos
+      summary: Listar archivos con paginación
+      description: Obtiene una lista paginada de archivos con filtros opcionales
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: usuarioId
+          in: query
+          schema:
+            type: integer
+        - name: tipo
+          in: query
+          schema:
+            type: string
+        - name: entidad
+          in: query
+          schema:
+            type: string
+        - name: activo
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Lista paginada de archivos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileListResponse'
+  /{id}:
+    get:
+      tags:
+        - Archivos
+      summary: Obtener archivo por ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Archivo encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileUploadResponse'
+        '404':
+          description: Archivo no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /uuid/{uuid}:
+    get:
+      tags:
+        - Archivos
+      summary: Obtener archivo por UUID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Archivo encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileUploadResponse'
+        '404':
+          description: Archivo no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /{id}:
+    patch:
+      tags:
+        - Archivos
+      summary: Actualizar metadata de archivo
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nombreOriginal:
+                  type: string
+                  maxLength: 255
+                entidadAsociada:
+                  type: string
+                uuidAsociado:
+                  type: string
+                  format: uuid
+                carpeta:
+                  type: string
+                publico:
+                  type: boolean
+                activo:
+                  type: boolean
+      responses:
+        '200':
+          description: Archivo actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileUploadResponse'
+        '404':
+          description: Archivo no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Archivos
+      summary: Eliminar archivo (soft delete)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Archivo eliminado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      success:
+                        type: boolean
+                        example: true
+        '404':
+          description: Archivo no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
