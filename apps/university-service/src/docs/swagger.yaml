@@ -1,0 +1,847 @@
+openapi: 3.0.3
+info:
+  title: UAJS University Service API
+  description: Microservicio Enterprise de gestión universitaria académica (empresas, terceros, facultades, programas, estudiantes y docentes) con indexación en Elasticsearch.
+  version: 1.0.0
+servers:
+  - url: http://localhost:3004
+    description: Servidor local de desarrollo
+  - url: http://localhost:3000
+    description: API Gateway
+paths:
+  /api/v1/universidad/health:
+    get:
+      summary: Health check del servicio
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Estado del servicio
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: UP
+                  service:
+                    type: string
+                    example: university-service
+                  timestamp:
+                    type: string
+
+  /api/v1/universidad/empresas:
+    get:
+      summary: Listar empresas con paginación
+      tags:
+        - Empresas
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lista paginada de empresas
+    post:
+      summary: Crear una nueva empresa
+      tags:
+        - Empresas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEmpresaDto'
+      responses:
+        '201':
+          description: Empresa creada exitosamente
+        '400':
+          description: Error de validación
+        '409':
+          description: Conflicto - NIT duplicado
+
+  /api/v1/universidad/empresas/search:
+    get:
+      summary: Búsqueda avanzada de empresas en Elasticsearch
+      tags:
+        - Empresas
+      parameters:
+        - name: search
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Resultados desde Elasticsearch
+
+  /api/v1/universidad/empresas/{id}:
+    get:
+      summary: Obtener empresa por ID o UUID
+      tags:
+        - Empresas
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Detalle de la empresa
+        '404':
+          description: Empresa no encontrada
+    put:
+      summary: Actualizar empresa por ID
+      tags:
+        - Empresas
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateEmpresaDto'
+      responses:
+        '200':
+          description: Empresa actualizada
+        '404':
+          description: Empresa no encontrada
+    delete:
+      summary: Eliminar empresa (soft delete)
+      tags:
+        - Empresas
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Empresa eliminada
+        '409':
+          description: Tiene terceros asociados
+
+  /api/v1/universidad/terceros:
+    get:
+      summary: Listar terceros (personas)
+      tags:
+        - Terceros
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: tipoDocumento
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lista paginada de terceros
+    post:
+      summary: Crear un nuevo tercero
+      tags:
+        - Terceros
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTerceroDto'
+      responses:
+        '201':
+          description: Tercero creado
+        '409':
+          description: Documento duplicado
+
+  /api/v1/universidad/terceros/search:
+    get:
+      summary: Búsqueda avanzada de terceros en Elasticsearch
+      tags:
+        - Terceros
+      parameters:
+        - name: search
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Coincidencias en Elasticsearch
+
+  /api/v1/universidad/terceros/{id}:
+    get:
+      summary: Obtener tercero por ID
+      tags:
+        - Terceros
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Tercero encontrado
+        '404':
+          description: No encontrado
+    put:
+      summary: Actualizar tercero
+      tags:
+        - Terceros
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTerceroDto'
+      responses:
+        '200':
+          description: Actualizado
+    delete:
+      summary: Eliminar tercero
+      tags:
+        - Terceros
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Eliminado
+        '409':
+          description: Tiene estudiantes o docentes vinculados
+
+  /api/v1/universidad/facultades:
+    get:
+      summary: Listar facultades
+      tags:
+        - Facultades
+      responses:
+        '200':
+          description: Lista de facultades
+    post:
+      summary: Crear facultad
+      tags:
+        - Facultades
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFacultadDto'
+      responses:
+        '201':
+          description: Facultad creada
+
+  /api/v1/universidad/facultades/search:
+    get:
+      summary: Buscar facultades en Elasticsearch
+      tags:
+        - Facultades
+      parameters:
+        - name: search
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Resultados
+
+  /api/v1/universidad/facultades/{id}:
+    get:
+      summary: Obtener facultad por ID
+      tags:
+        - Facultades
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Detalle facultad
+    put:
+      summary: Actualizar facultad
+      tags:
+        - Facultades
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateFacultadDto'
+      responses:
+        '200':
+          description: Actualizada
+    delete:
+      summary: Eliminar facultad
+      tags:
+        - Facultades
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Eliminada
+        '409':
+          description: Tiene programas o docentes asociados
+
+  /api/v1/universidad/programas:
+    get:
+      summary: Listar programas académicos
+      tags:
+        - Programas
+      responses:
+        '200':
+          description: Lista de programas
+    post:
+      summary: Crear programa académico
+      tags:
+        - Programas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProgramaDto'
+      responses:
+        '201':
+          description: Creado
+
+  /api/v1/universidad/programas/search:
+    get:
+      summary: Buscar programas en Elasticsearch
+      tags:
+        - Programas
+      parameters:
+        - name: search
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Resultados
+
+  /api/v1/universidad/programas/{id}:
+    get:
+      summary: Obtener programa por ID
+      tags:
+        - Programas
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Detalle
+    put:
+      summary: Actualizar programa
+      tags:
+        - Programas
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProgramaDto'
+      responses:
+        '200':
+          description: Actualizado
+    delete:
+      summary: Eliminar programa
+      tags:
+        - Programas
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Eliminado
+        '409':
+          description: Tiene estudiantes vinculados
+
+  /api/v1/universidad/estudiantes:
+    get:
+      summary: Listar estudiantes matriculados
+      tags:
+        - Estudiantes
+      responses:
+        '200':
+          description: Lista de estudiantes
+    post:
+      summary: Crear matrícula de estudiante
+      tags:
+        - Estudiantes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEstudianteDto'
+      responses:
+        '201':
+          description: Estudiante registrado
+        '404':
+          description: Tercero o Programa no existe
+        '409':
+          description: Código o persona duplicada
+
+  /api/v1/universidad/estudiantes/search:
+    get:
+      summary: Buscar estudiantes en Elasticsearch
+      tags:
+        - Estudiantes
+      parameters:
+        - name: search
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Resultados
+
+  /api/v1/universidad/estudiantes/{id}:
+    get:
+      summary: Obtener estudiante por ID
+      tags:
+        - Estudiantes
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Detalle
+    put:
+      summary: Actualizar estudiante
+      tags:
+        - Estudiantes
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateEstudianteDto'
+      responses:
+        '200':
+          description: Actualizado
+    delete:
+      summary: Eliminar estudiante (soft delete)
+      tags:
+        - Estudiantes
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Eliminado
+
+  /api/v1/universidad/docentes:
+    get:
+      summary: Listar docentes
+      tags:
+        - Docentes
+      responses:
+        '200':
+          description: Lista de docentes
+    post:
+      summary: Crear vinculación docente
+      tags:
+        - Docentes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDocenteDto'
+      responses:
+        '201':
+          description: Docente registrado
+        '404':
+          description: Tercero o Facultad no existe
+        '409':
+          description: Código o persona duplicada
+
+  /api/v1/universidad/docentes/search:
+    get:
+      summary: Buscar docentes en Elasticsearch
+      tags:
+        - Docentes
+      parameters:
+        - name: search
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Resultados
+
+  /api/v1/universidad/docentes/{id}:
+    get:
+      summary: Obtener docente por ID
+      tags:
+        - Docentes
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Detalle
+    put:
+      summary: Actualizar docente
+      tags:
+        - Docentes
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDocenteDto'
+      responses:
+        '200':
+          description: Actualizado
+    delete:
+      summary: Eliminar docente (soft delete)
+      tags:
+        - Docentes
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Eliminado
+
+components:
+  schemas:
+    CreateEmpresaDto:
+      type: object
+      required:
+        - razonSocial
+        - nit
+      properties:
+        razonSocial:
+          type: string
+          example: Acero & Estructuras S.A.S.
+        nombreComercial:
+          type: string
+          example: Aceros S.A.S.
+        nit:
+          type: string
+          example: '900123456'
+        digitoVerificacion:
+          type: string
+          example: '7'
+        direccion:
+          type: string
+          example: Carrera 45 # 26-85
+        telefono:
+          type: string
+          example: '+57 3001234567'
+        email:
+          type: string
+          example: contacto@aceros.com
+
+    UpdateEmpresaDto:
+      type: object
+      properties:
+        razonSocial:
+          type: string
+        nombreComercial:
+          type: string
+        nit:
+          type: string
+        direccion:
+          type: string
+        telefono:
+          type: string
+        email:
+          type: string
+
+    CreateTerceroDto:
+      type: object
+      required:
+        - tipoDocumento
+        - numeroDocumento
+        - primerNombre
+        - primerApellido
+      properties:
+        tipoDocumento:
+          type: string
+          example: CC
+        numeroDocumento:
+          type: string
+          example: '1020304050'
+        primerNombre:
+          type: string
+          example: Juan
+        segundoNombre:
+          type: string
+          example: Carlos
+        primerApellido:
+          type: string
+          example: Pérez
+        segundoApellido:
+          type: string
+          example: Gómez
+        email:
+          type: string
+          example: juan.perez@uajs.edu.co
+        telefono:
+          type: string
+          example: '3109876543'
+        empresaId:
+          type: integer
+          example: 1
+
+    UpdateTerceroDto:
+      type: object
+      properties:
+        primerNombre:
+          type: string
+        primerApellido:
+          type: string
+        email:
+          type: string
+        telefono:
+          type: string
+
+    CreateFacultadDto:
+      type: object
+      required:
+        - codigo
+        - nombre
+      properties:
+        campusId:
+          type: integer
+          default: 1
+        codigo:
+          type: string
+          example: FING
+        nombre:
+          type: string
+          example: Facultad de Ingeniería
+        decano:
+          type: string
+          example: Dr. Roberto Gómez
+        email:
+          type: string
+          example: ingenieria@uajs.edu.co
+
+    UpdateFacultadDto:
+      type: object
+      properties:
+        nombre:
+          type: string
+        decano:
+          type: string
+        email:
+          type: string
+
+    CreateProgramaDto:
+      type: object
+      required:
+        - facultadId
+        - codigo
+        - nombre
+        - duracionSemestres
+        - creditosTotales
+      properties:
+        facultadId:
+          type: integer
+          example: 1
+        codigo:
+          type: string
+          example: SIS-01
+        nombre:
+          type: string
+          example: Ingeniería de Sistemas
+        nivel:
+          type: string
+          enum: [undergraduate, specialization, masters, doctorate, technologist, technician]
+          default: undergraduate
+        duracionSemestres:
+          type: integer
+          example: 10
+        creditosTotales:
+          type: integer
+          example: 160
+        codigoSnies:
+          type: string
+          example: '12345'
+
+    UpdateProgramaDto:
+      type: object
+      properties:
+        nombre:
+          type: string
+        nivel:
+          type: string
+        duracionSemestres:
+          type: integer
+        creditosTotales:
+          type: integer
+
+    CreateEstudianteDto:
+      type: object
+      required:
+        - personaId
+        - programaId
+        - codigoEstudiante
+      properties:
+        personaId:
+          type: integer
+          example: 1
+        programaId:
+          type: integer
+          example: 1
+        codigoEstudiante:
+          type: string
+          example: '20261001'
+        fechaMatricula:
+          type: string
+          example: '2026-02-01'
+        semestreActual:
+          type: integer
+          default: 1
+        promedio:
+          type: number
+          example: 4.5
+        estado:
+          type: string
+          enum: [active, inactive, graduated, withdrawn, suspended]
+          default: active
+
+    UpdateEstudianteDto:
+      type: object
+      properties:
+        semestreActual:
+          type: integer
+        promedio:
+          type: number
+        estado:
+          type: string
+
+    CreateDocenteDto:
+      type: object
+      required:
+        - personaId
+        - facultadId
+        - codigoDocente
+      properties:
+        personaId:
+          type: integer
+          example: 2
+        facultadId:
+          type: integer
+          example: 1
+        codigoDocente:
+          type: string
+          example: 'DOC-101'
+        tipoContrato:
+          type: string
+          enum: [full_time, part_time, visiting, honorary]
+          default: full_time
+        fechaContratacion:
+          type: string
+          example: '2025-01-15'
+        tituloAcademico:
+          type: string
+          example: Doctor en Ciencias de la Computación
+        estado:
+          type: string
+          enum: [active, inactive, retired]
+          default: active
+
+    UpdateDocenteDto:
+      type: object
+      properties:
+        tipoContrato:
+          type: string
+        tituloAcademico:
+          type: string
+        estado:
+          type: string
