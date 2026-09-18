@@ -156,11 +156,13 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-uajs206**}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      JWT_SECRET: ${JWT_SECRET:-uajs_dev_jwt_secret_1234567890abcdefghijklmnopqrstuvwxyz}
+      # Debe ser idéntico al JWT_SECRET del auth-service: el gateway verifica
+      # con él los access tokens que firma auth-service.
+      JWT_SECRET: ${JWT_SECRET:-uajs_dev_jwt_secret_1234567890abcdefghijklmnopqrstuvwxyz_extra_long_654321}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-change_me}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change_me}
       SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN:-uajs_service_token_2024}
-      CORS_ALLOWED_ORIGINS: http://localhost:3000,https://campus.uajs.edu
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173,http://localhost:4173,https://campus.uajs.edu
       RATE_LIMIT_WINDOW: 60000
       RATE_LIMIT_MAX: 100
       ELASTICSEARCH_HOST: elasticsearch

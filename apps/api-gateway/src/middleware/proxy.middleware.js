@@ -42,6 +42,16 @@ function onError(err, req, res) {
 }
 
 function onProxyReq(proxyReq, req) {
+  // Express ya consumió el body con express.json(): hay que reenviarlo
+  // manualmente o el servicio destino se queda esperando (cuelgue/timeout).
+  const { body } = req;
+  const tieneBody = body && typeof body === 'object' && Object.keys(body).length > 0;
+  if (tieneBody && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+    const bodyData = JSON.stringify(body);
+    proxyReq.setHeader('Content-Type', 'application/json');
+    proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+    proxyReq.write(bodyData);
+  }
   if (req.user) {
     proxyReq.setHeader('X-User-Id', String(req.user.id));
     proxyReq.setHeader('X-User-Roles', req.user.roles.join(','));

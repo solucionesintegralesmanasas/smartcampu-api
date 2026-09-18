@@ -8,6 +8,10 @@ const PUBLIC_ROUTES = [
   '/health',
   '/api/v1/auth/login',
   '/api/v1/auth/register',
+  '/api/v1/auth/refresh',
+  '/api/v1/auth/password-reset',
+  '/api/v1/auth/password-reset/confirm',
+  // Compatibilidad con nombres antiguos usados en docs/colecciones:
   '/api/v1/auth/reset-password',
   '/api/v1/auth/reset-password/confirm',
 ];
@@ -33,14 +37,24 @@ module.exports = function authMiddleware(req, res, next) {
 
   try {
     const payload = jwt.verify(token, env.JWT_SECRET);
+    const { roles: rolesPayload, rol: rolPayload, sub } = payload;
 
-    if (!payload.sub || !Array.isArray(payload.roles)) {
-      throw new Error('Payload JWT inválido: falta sub o roles');
+    // auth-service firma { sub, rol (singular), modulos, ... } mientras que
+    // versiones anteriores firmaban { sub, roles[] }. Se aceptan ambas.
+    let roles = [];
+    if (Array.isArray(rolesPayload)) {
+      roles = rolesPayload;
+    } else if (rolPayload) {
+      roles = [rolPayload];
+    }
+
+    if (!sub || roles.length === 0) {
+      throw new Error('Payload JWT inválido: falta sub o rol/roles');
     }
 
     req.user = {
-      id: payload.sub,
-      roles: payload.roles,
+      id: sub,
+      roles,
     };
     next();
   } catch (err) {
