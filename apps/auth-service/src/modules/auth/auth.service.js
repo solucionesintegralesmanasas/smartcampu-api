@@ -139,6 +139,21 @@ class AuthService {
       }));
   }
 
+  /**
+   * Devuelve el perfil completo del usuario autenticado en una sola consulta
+   * (usuario + tercero + estudiante/docente), más sus módulos por permisos.
+   * Es la fuente de verdad para la vista de perfil del frontend.
+   */
+  async getProfile(userId) {
+    const perfil = await this.authRepository.findFullProfile(userId);
+    if (!perfil) {
+      throw new UnauthorizedError('Usuario no encontrado o inactivo');
+    }
+    const permisos = await this.authRepository.findPermissions(perfil.roles || []);
+    const modulos = this.buildModulos(permisos);
+    return { ...perfil, modulos };
+  }
+
   async logout(logoutDto, req) {
     const user = await this.authRepository.findByRefreshToken(logoutDto.refreshToken);
     if (!user) {

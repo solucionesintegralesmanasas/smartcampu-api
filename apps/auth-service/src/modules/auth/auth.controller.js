@@ -46,6 +46,18 @@ class AuthController {
   }
 
   /**
+   * Devuelve el perfil del usuario autenticado.
+   */
+  async me(req, res, next) {
+    try {
+      const result = await this.authService.getProfile(req.userId);
+      res.status(200).json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * Maneja el cierre de sesión.
    */
   async logout(req, res, next) {
