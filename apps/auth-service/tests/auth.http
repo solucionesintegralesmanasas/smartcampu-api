@@ -1,5 +1,7 @@
 ### Variables - Cambia el host según tu entorno
 @base = http://localhost:3001
+@university = http://localhost:3004
+@gateway = http://localhost:3000
 @contentType = application/json
 
 ### ============================================
@@ -10,30 +12,27 @@ GET {{base}}/healthz
 Content-Type: {{contentType}}
 
 ### ============================================
-### REGISTRO DE USUARIO
+### REGISTER
+### Crea el usuario usado por LOGIN (solo una vez).
 ### ============================================
-# Crea la persona en la tabla `persons` y el usuario en `users`
-# (vinculado por person_id). El rol por defecto es STUDENT.
-# OJO: este correo ya existe; reutilizarlo devuelve ConflictError (409).
-# Para probar el registro usa un correo/cedula distintos.
 
-# @name register
 POST {{base}}/api/v1/auth/register
 Content-Type: {{contentType}}
 
 {
   "email": "mdarwin1992@hotmail.com",
   "password": "NuevaPassword.2026",
-  "firstName": "Darwin",
-  "lastName": "Montes",
+  "firstName": "Marwin",
+  "lastName": "Pérez",
   "documentTypeCode": "CC",
-  "documentNumber": "1100688704"
+  "documentNumber": "1102345678"
 }
 
 ### ============================================
 ### LOGIN
+### Usa las mismas credenciales del registro.
+### Devuelve accessToken + refreshToken + user.
 ### ============================================
-# Usa las mismas credenciales del registro.
 
 # @name login
 POST {{base}}/api/v1/auth/login
@@ -42,6 +41,115 @@ Content-Type: {{contentType}}
 {
   "email": "mdarwin1992@hotmail.com",
   "password": "NuevaPassword.2026"
+}
+
+### ============================================
+### PERFIL (ME)
+### Requiere el accessToken del LOGIN. Es la fuente
+### de verdad para la vista de perfil del frontend.
+### Devuelve usuario + tercero + estudiante/docente
+### (datos académicos de university-service).
+### También disponible vía gateway en :3000/api/v1/auth/me
+### ============================================
+
+GET {{base}}/api/v1/auth/me
+Content-Type: {{contentType}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ============================================
+### PERFIL VÍA API GATEWAY (misma respuesta)
+### ============================================
+
+GET {{gateway}}/api/v1/auth/me
+Content-Type: {{contentType}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ============================================
+### FLUJO COMPLETO DE PERFIL: TERCERO -> USUARIO
+### Regla del dominio: todo estudiante/docente proviene
+### de un tercero (persons) de university-service, y al
+### matricularlo se le crea su usuario automáticamente.
+### Pasos: 1) crear tercero, 2) matricular estudiante
+### (crea el usuario con rol STUDENT), 3) login, 4) me.
+### ============================================
+
+### Paso 1: crear tercero en university-service (:3004)
+
+# @name crearTercero
+POST {{university}}/api/v1/universidad/terceros
+Content-Type: {{contentType}}
+
+{
+  "tipoDocumento": "CC",
+  "numeroDocumento": "1102345678",
+  "primerNombre": "Marwin",
+  "segundoNombre": "David",
+  "primerApellido": "Pérez",
+  "segundoApellido": "Gómez",
+  "fechaNacimiento": "1992-05-20",
+  "genero": "M",
+  "email": "mdarwin1992@hotmail.com",
+  "telefono": "3104567890",
+  "direccion": "Carrera 15 # 85-30, Bogotá",
+  "nombreCiudad": "Bogotá",
+  "activo": true
+}
+
+### Paso 2: matricular estudiante (usa el id del tercero creado).
+### Crea automáticamente el usuario en uajs_auth con rol STUDENT.
+
+# @name crearEstudiante
+POST {{university}}/api/v1/universidad/estudiantes
+Content-Type: {{contentType}}
+
+{
+  "personaId": 1,
+  "programaId": 1,
+  "codigoEstudiante": "EST-2026-0001",
+  "fechaMatricula": "2026-01-15",
+  "semestreActual": 1,
+  "promedio": 4.5,
+  "estado": "active",
+  "password": "NuevaPassword.2026",
+  "activo": true
+}
+
+### Paso 3: login con el usuario provisionado
+
+# @name loginEstudiante
+POST {{base}}/api/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "mdarwin1992@hotmail.com",
+  "password": "NuevaPassword.2026"
+}
+
+### Paso 4: perfil enriquecido del estudiante.
+### Incluye tercero + estudiante (código, semestre,
+### promedio, programa) + roles y módulos.
+
+GET {{base}}/api/v1/auth/me
+Content-Type: {{contentType}}
+Authorization: Bearer {{loginEstudiante.response.body.data.accessToken}}
+
+### Variante docente: registrar docente (crea usuario con rol TEACHER).
+### Requiere un tercero distinto (otra persona) y una facultad existente.
+
+# @name crearDocente
+POST {{university}}/api/v1/universidad/docentes
+Content-Type: {{contentType}}
+
+{
+  "personaId": 1,
+  "facultadId": 1,
+  "codigoDocente": "DOC-2026-0001",
+  "tipoContrato": "full_time",
+  "fechaContratacion": "2026-01-10",
+  "tituloAcademico": "Doctorado en Ciencias de la Computación",
+  "estado": "active",
+  "password": "NuevaPassword.2026",
+  "activo": true
 }
 
 ### ============================================

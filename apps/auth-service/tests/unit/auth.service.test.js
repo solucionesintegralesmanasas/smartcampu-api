@@ -64,6 +64,7 @@ function mockRepository(overrides = {}) {
     findPasswordResetToken: jest.fn().mockResolvedValue(null),
     deletePasswordResetToken: jest.fn().mockResolvedValue(undefined),
     updatePassword: jest.fn().mockResolvedValue(undefined),
+    findFullProfile: jest.fn().mockResolvedValue(null),
     ...overrides,
   };
 }
@@ -260,6 +261,60 @@ describe('AuthService', () => {
       );
 
       expect(repo.invalidateRefreshTokens).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getProfile', () => {
+    it('debe devolver el perfil con tercero y estudiante cuando existen', async () => {
+      repo.findFullProfile.mockResolvedValue({
+        id: 1,
+        uuid: 'u1',
+        email: 'est@test.com',
+        roles: ['STUDENT'],
+        cedula: '1102345678',
+        nombre: 'Marwin Pérez',
+        tercero: { nombre: 'Marwin Pérez', numeroDocumento: '1102345678' },
+        estudiante: {
+          codigoEstudiante: 'EST-2026-0001',
+          programa: { nombre: 'Ingeniería de Sistemas', codigo: 'PRG-SIS' },
+        },
+        docente: null,
+      });
+      repo.findPermissions.mockResolvedValue([{ module: 'perfil', action: 'read' }]);
+
+      const result = await service.getProfile(1);
+
+      expect(result.email).toBe('est@test.com');
+      expect(result.estudiante.codigoEstudiante).toBe('EST-2026-0001');
+      expect(result.estudiante.programa.nombre).toBe('Ingeniería de Sistemas');
+      expect(result.modulos).toEqual([{ modulo: 'perfil', acciones: ['read'] }]);
+      expect(repo.findFullProfile).toHaveBeenCalledWith(1);
+    });
+
+    it('debe devolver el perfil sin datos académicos cuando no hay vínculo', async () => {
+      repo.findFullProfile.mockResolvedValue({
+        id: 1,
+        uuid: 'u1',
+        email: 'solo@test.com',
+        roles: ['STUDENT'],
+        cedula: null,
+        nombre: 'Solo Auth',
+        tercero: null,
+        estudiante: null,
+        docente: null,
+      });
+
+      const result = await service.getProfile(1);
+
+      expect(result.tercero).toBeNull();
+      expect(result.estudiante).toBeNull();
+      expect(result.docente).toBeNull();
+    });
+
+    it('debe lanzar UnauthorizedError si el usuario no existe', async () => {
+      repo.findFullProfile.mockResolvedValue(null);
+
+      await expect(service.getProfile(999)).rejects.toThrow(UnauthorizedError);
     });
   });
 
