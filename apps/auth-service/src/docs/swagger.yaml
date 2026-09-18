@@ -69,3 +69,84 @@ paths:
       responses:
         '200':
           description: Sesión cerrada exitosamente
+  /auth/me:
+    get:
+      summary: Perfil del usuario autenticado
+      description: >-
+        Requiere header Authorization con el accessToken. Es la fuente de verdad
+        para la vista de perfil del frontend. Además del usuario, roles y módulos,
+        incluye el tercero (persons) y los datos académicos de university-service
+        (estudiante con programa o docente con facultad) cuando el usuario fue
+        provisionado desde un tercero. Regla del dominio: todo estudiante/docente
+        proviene de un tercero con usuario.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Perfil del usuario
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: integer }
+                  uuid: { type: string }
+                  email: { type: string, format: email }
+                  roles: { type: array, items: { type: string } }
+                  cedula: { type: string, nullable: true }
+                  nombre: { type: string, nullable: true }
+                  tercero:
+                    type: object
+                    nullable: true
+                    properties:
+                      primerNombre: { type: string }
+                      segundoNombre: { type: string, nullable: true }
+                      primerApellido: { type: string }
+                      segundoApellido: { type: string, nullable: true }
+                      nombre: { type: string }
+                      tipoDocumento: { type: string }
+                      numeroDocumento: { type: string }
+                      fechaNacimiento: { type: string, format: date, nullable: true }
+                      genero: { type: string, nullable: true }
+                      email: { type: string }
+                      telefono: { type: string, nullable: true }
+                      direccion: { type: string, nullable: true }
+                      ciudad: { type: string, nullable: true }
+                  estudiante:
+                    type: object
+                    nullable: true
+                    properties:
+                      codigoEstudiante: { type: string }
+                      fechaMatricula: { type: string, format: date }
+                      semestreActual: { type: integer }
+                      promedio: { type: number, nullable: true }
+                      estado: { type: string }
+                      programa:
+                        type: object
+                        properties:
+                          id: { type: integer }
+                          nombre: { type: string }
+                          codigo: { type: string }
+                  docente:
+                    type: object
+                    nullable: true
+                    properties:
+                      codigoDocente: { type: string }
+                      tipoContrato: { type: string }
+                      fechaContratacion: { type: string, format: date }
+                      tituloAcademico: { type: string, nullable: true }
+                      estado: { type: string }
+                      facultad:
+                        type: object
+                        properties:
+                          id: { type: integer }
+                          nombre: { type: string }
+                          codigo: { type: string }
+        '401':
+          description: Token de acceso no proporcionado, inválido o expirado
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
