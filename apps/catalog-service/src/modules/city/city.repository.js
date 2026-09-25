@@ -99,6 +99,16 @@ class CityRepository {
     return result.affectedRows > 0;
   }
 
+  async search(term) {
+    const pool = await this.getPool();
+    const pattern = `%${term}%`;
+    const rows = await pool.query(
+      'SELECT id, uuid, name, dane_code AS daneCode, state_id AS stateId, is_active AS active, created_at, updated_at FROM cities WHERE is_active = ? AND (name LIKE ? OR dane_code LIKE ?) ORDER BY name ASC LIMIT 50',
+      [1, pattern, pattern],
+    );
+    return rows;
+  }
+
   async countAll() {
     const pool = await this.getPool();
     const rows = await pool.query('SELECT COUNT(*) AS total FROM cities WHERE is_active = ?', [1]);

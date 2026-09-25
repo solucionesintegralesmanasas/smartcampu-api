@@ -34,7 +34,7 @@ class ElasticsearchClient {
       apiVersion,
       maxRetries,
       requestTimeout,
-      sniffOnStart: true,
+      sniffOnStart: process.env.ES_SNIFF === 'true',
     });
 
     this.breaker = new CircuitBreaker(

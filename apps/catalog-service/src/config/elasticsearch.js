@@ -13,42 +13,102 @@ const esClient = createElasticsearchClient({
 
 const ensureCatalogIndex = async () => {
   try {
-    const exists = await esClient.client.indices.exists({ index: env.CATALOG_INDEX });
-    if (!exists.body) {
-      await esClient.client.indices.create({
-        index: env.CATALOG_INDEX,
+    const indices = [
+      {
+        name: env.CATALOG_INDEX,
         body: {
-          settings: {
-            number_of_shards: 2,
-            number_of_replicas: 1,
-          },
+          settings: { number_of_shards: 1, number_of_replicas: 0 },
           mappings: {
-            dynamic: 'strict',
             properties: {
               type: { type: 'keyword' },
               id: { type: 'integer' },
-              nombre: { type: 'text', analyzer: 'spanish' },
-              codigo: { type: 'keyword' },
-              estado: { type: 'keyword' },
-              parent: {
-                properties: {
-                  id: { type: 'integer' },
-                  type: { type: 'keyword' },
-                  nombre: { type: 'keyword' },
-                },
-              },
-              location: {
-                type: 'geo_point',
-              },
+              name: { type: 'text', analyzer: 'spanish' },
+            },
+          },
+        },
+      },
+      {
+        name: 'departments',
+        body: {
+          mappings: {
+            properties: {
+              id: { type: 'integer' },
+              uuid: { type: 'keyword' },
+              name: { type: 'text', analyzer: 'spanish', fields: { keyword: { type: 'keyword' } } },
+              daneCode: { type: 'keyword' },
+              countryId: { type: 'integer' },
+              active: { type: 'boolean' },
               createdAt: { type: 'date' },
               updatedAt: { type: 'date' },
             },
           },
         },
-      });
-    }
+      },
+      {
+        name: 'cities',
+        body: {
+          mappings: {
+            properties: {
+              id: { type: 'integer' },
+              uuid: { type: 'keyword' },
+              name: { type: 'text', analyzer: 'spanish', fields: { keyword: { type: 'keyword' } } },
+              daneCode: { type: 'keyword' },
+              stateId: { type: 'integer' },
+              active: { type: 'boolean' },
+              createdAt: { type: 'date' },
+              updatedAt: { type: 'date' },
+            },
+          },
+        },
+      },
+      {
+        name: 'campuses',
+        body: {
+          mappings: {
+            properties: {
+              id: { type: 'integer' },
+              uuid: { type: 'keyword' },
+              name: { type: 'text', analyzer: 'spanish', fields: { keyword: { type: 'keyword' } } },
+              address: { type: 'text' },
+              phone: { type: 'keyword' },
+              cityId: { type: 'integer' },
+              active: { type: 'boolean' },
+              createdAt: { type: 'date' },
+              updatedAt: { type: 'date' },
+            },
+          },
+        },
+      },
+      {
+        name: 'document-types',
+        body: {
+          mappings: {
+            properties: {
+              id: { type: 'integer' },
+              uuid: { type: 'keyword' },
+              name: { type: 'text', analyzer: 'spanish', fields: { keyword: { type: 'keyword' } } },
+              code: { type: 'keyword' },
+              requiresCheckDigit: { type: 'boolean' },
+              active: { type: 'boolean' },
+              createdAt: { type: 'date' },
+              updatedAt: { type: 'date' },
+            },
+          },
+        },
+      },
+    ];
+
+    await Promise.all(
+      indices.map(async (idx) => {
+        const exists = await esClient.client.indices.exists({ index: idx.name });
+        const isPresent = typeof exists === 'boolean' ? exists : exists.body;
+        if (!isPresent) {
+          await esClient.client.indices.create({ index: idx.name, body: idx.body });
+        }
+      }),
+    );
   } catch (error) {
-    // El índice se crea de forma no bloqueante
+    // La creación de índices se realiza de forma no bloqueante
   }
 };
 

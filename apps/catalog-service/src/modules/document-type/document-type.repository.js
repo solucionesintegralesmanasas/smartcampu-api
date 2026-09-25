@@ -114,6 +114,16 @@ class DocumentTypeRepository {
     return result.affectedRows > 0;
   }
 
+  async search(term) {
+    const pool = await this.getPool();
+    const pattern = `%${term}%`;
+    const rows = await pool.query(
+      'SELECT id, uuid, name, code, requires_check_digit AS requiresCheckDigit, is_active AS active, created_at, updated_at FROM document_types WHERE is_active = ? AND (name LIKE ? OR code LIKE ?) ORDER BY name ASC LIMIT 50',
+      [1, pattern, pattern],
+    );
+    return rows;
+  }
+
   async countAll() {
     const pool = await this.getPool();
     const rows = await pool.query(

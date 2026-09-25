@@ -119,4 +119,47 @@ CREATE TABLE IF NOT EXISTS document_types (
   COLLATE = utf8mb4_unicode_ci
   COMMENT = 'Catálogo de tipos de documento de identidad';
 
+-- ------------------------------------------------------------
+-- campuses
+-- Sedes y campus físicos universitarios
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS campuses (
+    id            INT UNSIGNED    NOT NULL AUTO_INCREMENT COMMENT 'Identificador único interno',
+    uuid          CHAR(36)        NOT NULL DEFAULT (UUID()) COMMENT 'Identificador público (UUID)',
+    city_id       INT UNSIGNED    NOT NULL COMMENT 'ID de la ciudad a la que pertenece',
+    name          VARCHAR(100)    NOT NULL COMMENT 'Nombre de la sede/campus',
+    address       VARCHAR(200)    NULL     COMMENT 'Dirección de la sede',
+    phone         VARCHAR(20)     NULL     COMMENT 'Teléfono de contacto',
+    is_active     TINYINT(1)      NOT NULL DEFAULT 1 COMMENT 'Registro activo (1) o inactivo (0)',
+    created_at    TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Fecha y hora de creación',
+    updated_at    TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Fecha y hora de última modificación',
+    --
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_campuses_uuid     (uuid),
+    UNIQUE KEY uq_campuses_name     (name),
+    KEY        fk_campuses_city     (city_id),
+    CONSTRAINT fk_campuses_city
+        FOREIGN KEY (city_id) REFERENCES cities (id)
+        ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci
+  COMMENT = 'Sedes / Campus universitarios';
+
+-- ------------------------------------------------------------
+-- Vista de compatibilidad para código legacy (sedes)
+-- ------------------------------------------------------------
+CREATE OR REPLACE VIEW sedes AS
+SELECT
+    id AS id_sede,
+    uuid,
+    name AS nombre,
+    address AS direccion,
+    phone AS telefono,
+    city_id AS id_ciudad,
+    is_active AS activo,
+    created_at,
+    updated_at
+FROM campuses;
+
 SET FOREIGN_KEY_CHECKS = 1;

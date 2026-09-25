@@ -161,21 +161,31 @@ class CampusService {
   }
 
   async search(query) {
+    const searchTerm = typeof query === 'string' ? query : query?.search || '';
+    if (!searchTerm || !searchTerm.trim()) {
+      return [];
+    }
+
     try {
       const result = await esClient.search({
         index: ES_INDEX,
         query: {
           multi_match: {
-            query,
+            query: searchTerm,
             fields: ['name', 'address', 'phone'],
             fuzziness: 'AUTO',
           },
         },
       });
-      return result.hits.hits.map((hit) => hit._source); // eslint-disable-line no-underscore-dangle
+      const hits = result?.hits?.hits || [];
+      if (hits.length > 0) {
+        return hits.map((hit) => hit._source); // eslint-disable-line no-underscore-dangle
+      }
     } catch (error) {
-      return [];
+      // Elasticsearch fallback to relational database
     }
+
+    return this.campusRepository.search(searchTerm);
   }
 
   async invalidateCache() {
