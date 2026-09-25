@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "test": "jest --runInBand",
+    "test": "jest --runInBand --forceExit",
     "test:coverage": "jest --coverage",
     "lint": "eslint src/ tests/ jest.config.js"
   },

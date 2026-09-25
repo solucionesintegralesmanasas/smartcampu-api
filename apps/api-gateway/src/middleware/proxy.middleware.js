@@ -42,6 +42,14 @@ function onError(err, req, res) {
 }
 
 function onProxyReq(proxyReq, req) {
+  if (req.user) {
+    proxyReq.setHeader('X-User-Id', String(req.user.id));
+    proxyReq.setHeader('X-User-Roles', req.user.roles.join(','));
+  }
+  if (req.requestId) {
+    proxyReq.setHeader('X-Request-Id', req.requestId);
+  }
+
   // Express ya consumió el body con express.json(): hay que reenviarlo
   // manualmente o el servicio destino se queda esperando (cuelgue/timeout).
   const { body } = req;
@@ -52,13 +60,21 @@ function onProxyReq(proxyReq, req) {
     proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
     proxyReq.write(bodyData);
   }
-  if (req.user) {
-    proxyReq.setHeader('X-User-Id', String(req.user.id));
-    proxyReq.setHeader('X-User-Roles', req.user.roles.join(','));
+}
+
+const PATH_REWRITES = {
+  '/api/v1/catalogos': '/api/v1/catalog',
+  '/api/v1/archivos': '/api/v1/storage',
+};
+
+function rewritePath(reqPath) {
+  const matchKey = Object.keys(PATH_REWRITES).find(
+    (from) => reqPath === from || reqPath.startsWith(`${from}/`),
+  );
+  if (matchKey) {
+    return PATH_REWRITES[matchKey] + reqPath.slice(matchKey.length);
   }
-  if (req.requestId) {
-    proxyReq.setHeader('X-Request-Id', req.requestId);
-  }
+  return reqPath;
 }
 
 module.exports = function setupProxy(app) {
@@ -70,6 +86,7 @@ module.exports = function setupProxy(app) {
         changeOrigin: true,
         timeout: 30000, // 30 segundos
         proxyTimeout: 30000,
+        pathRewrite: (reqPath) => rewritePath(reqPath),
         onError,
         onProxyReq,
         logLevel: 'warn',
