@@ -7,16 +7,18 @@ const { z } = require('zod');
 dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
 
 const EnvSchema = z.object({
-  NODE_ENV: z.enum(['development', 'staging', 'production']).default('development'),
+  NODE_ENV: z.enum(['development', 'staging', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(3001),
   JWT_SECRET: z.string().min(64, 'JWT_SECRET debe tener al menos 64 caracteres'),
   JWT_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
   JWT_REFRESH_SECRET: z
     .string()
-    .min(64)
     .optional()
-    .transform((val) => val || undefined),
+    .refine((val) => !val || val.length >= 64, {
+      message: 'JWT_REFRESH_SECRET debe tener al menos 64 caracteres',
+    })
+    .transform((val) => (val && val.trim().length > 0 ? val : undefined)),
   BCRYPT_ROUNDS: z.coerce.number().int().min(10).max(14)
     .default(12),
   MYSQL_HOST: z.string().default('mysql'),

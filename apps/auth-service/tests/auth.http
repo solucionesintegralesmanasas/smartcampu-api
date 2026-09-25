@@ -1,201 +1,170 @@
-### Variables - Cambia el host según tu entorno
+### ===================================================================
+### AUTH SERVICE - Pruebas de Endpoints
+### Microservicio: apps/auth-service
+### Puerto Directo: 3001 | Puerto API Gateway: 3000
+### Base de Datos: uajs_auth
+### Roles Sembrados: SUPER_ADMINISTRADOR, ADMINISTRADOR, DOCENTE, ESTUDIANTE
+### Contraseña por Defecto: Campus2026!*
+### ===================================================================
+
+### Variables de Entorno
 @base = http://localhost:3001
-@university = http://localhost:3004
 @gateway = http://localhost:3000
 @contentType = application/json
+@password = Campus2026!*
 
-### ============================================
-### HEALTH CHECK
-### ============================================
+### ===================================================================
+### 1. HEALTH CHECK
+### ===================================================================
 
 GET {{base}}/healthz
 Content-Type: {{contentType}}
 
-### ============================================
-### REGISTER
-### Crea el usuario usado por LOGIN (solo una vez).
-### ============================================
+### ===================================================================
+### 2. REGISTRO DE USUARIO (REGISTER)
+### Registra un nuevo usuario en uajs_auth (users + persons + user_roles)
+### ===================================================================
 
+# @name register
 POST {{base}}/api/v1/auth/register
 Content-Type: {{contentType}}
 
 {
-  "email": "mdarwin1992@hotmail.com",
-  "password": "NuevaPassword.2026",
-  "firstName": "Marwin",
-  "lastName": "Pérez",
+  "email": "nuevo.usuario@uajs.edu.co",
+  "password": "{{password}}",
+  "firstName": "Usuario",
+  "lastName": "Prueba",
   "documentTypeCode": "CC",
-  "documentNumber": "1102345678"
+  "documentNumber": "1098999888",
+  "phone": "3001112233"
 }
 
-### ============================================
-### LOGIN
-### Usa las mismas credenciales del registro.
-### Devuelve accessToken + refreshToken + user.
-### ============================================
+### ===================================================================
+### 3. LOGIN POR ROLES DEL SISTEMA
+### Inicia sesión con usuarios sembrados en uajs_auth según sus migraciones.
+### Devuelve: accessToken, refreshToken, expiresIn, datos del usuario y módulos RBAC.
+### ===================================================================
 
-# @name login
+### 3.1 Login como SUPER ADMINISTRADOR
+# @name loginAdmin
 POST {{base}}/api/v1/auth/login
 Content-Type: {{contentType}}
 
 {
-  "email": "mdarwin1992@hotmail.com",
-  "password": "NuevaPassword.2026"
+  "email": "admin@uajs.edu.co",
+  "password": "{{password}}"
 }
-
-### ============================================
-### PERFIL (ME)
-### Requiere el accessToken del LOGIN. Es la fuente
-### de verdad para la vista de perfil del frontend.
-### Devuelve usuario + tercero + estudiante/docente
-### (datos académicos de university-service).
-### También disponible vía gateway en :3000/api/v1/auth/me
-### ============================================
-
-GET {{base}}/api/v1/auth/me
-Content-Type: {{contentType}}
-Authorization: Bearer {{login.response.body.data.accessToken}}
-
-### ============================================
-### PERFIL VÍA API GATEWAY (misma respuesta)
-### ============================================
-
-GET {{gateway}}/api/v1/auth/me
-Content-Type: {{contentType}}
-Authorization: Bearer {{login.response.body.data.accessToken}}
-
-### ============================================
-### FLUJO COMPLETO DE PERFIL: TERCERO -> USUARIO
-### Regla del dominio: todo estudiante/docente proviene
-### de un tercero (persons) de university-service, y al
-### matricularlo se le crea su usuario automáticamente.
-### Pasos: 1) crear tercero, 2) matricular estudiante
-### (crea el usuario con rol STUDENT), 3) login, 4) me.
-### ============================================
-
-### Paso 1: crear tercero en university-service (:3004)
-
-# @name crearTercero
-POST {{university}}/api/v1/universidad/terceros
+### 3.2 Login como ADMINISTRADOR / PERSONAL
+# @name loginStaff
+POST {{base}}/api/v1/auth/login
 Content-Type: {{contentType}}
 
 {
-  "tipoDocumento": "CC",
-  "numeroDocumento": "1102345678",
-  "primerNombre": "Marwin",
-  "segundoNombre": "David",
-  "primerApellido": "Pérez",
-  "segundoApellido": "Gómez",
-  "fechaNacimiento": "1992-05-20",
-  "genero": "M",
-  "email": "mdarwin1992@hotmail.com",
-  "telefono": "3104567890",
-  "direccion": "Carrera 15 # 85-30, Bogotá",
-  "nombreCiudad": "Bogotá",
-  "activo": true
+  "email": "roberto.ospina@uajs.edu.co",
+  "password": "{{password}}"
 }
 
-### Paso 2: matricular estudiante (usa el id del tercero creado).
-### Crea automáticamente el usuario en uajs_auth con rol STUDENT.
-
-# @name crearEstudiante
-POST {{university}}/api/v1/universidad/estudiantes
+### 3.3 Login como DOCENTE (Profesor)
+# @name loginDocente
+POST {{base}}/api/v1/auth/login
 Content-Type: {{contentType}}
 
 {
-  "personaId": 1,
-  "programaId": 1,
-  "codigoEstudiante": "EST-2026-0001",
-  "fechaMatricula": "2026-01-15",
-  "semestreActual": 1,
-  "promedio": 4.5,
-  "estado": "active",
-  "password": "NuevaPassword.2026",
-  "activo": true
+  "email": "carlos.mendoza@uajs.edu.co",
+  "password": "{{password}}"
 }
 
-### Paso 3: login con el usuario provisionado
-
+### 3.4 Login como ESTUDIANTE
 # @name loginEstudiante
 POST {{base}}/api/v1/auth/login
 Content-Type: {{contentType}}
 
 {
-  "email": "mdarwin1992@hotmail.com",
-  "password": "NuevaPassword.2026"
+  "email": "santiago.morales@uajs.edu.co",
+  "password": "{{password}}"
 }
 
-### Paso 4: perfil enriquecido del estudiante.
-### Incluye tercero + estudiante (código, semestre,
-### promedio, programa) + roles y módulos.
+### 3.5 Login con el usuario recién registrado
+# @name loginNuevoUsuario
+POST {{base}}/api/v1/auth/login
+Content-Type: {{contentType}}
 
+{
+  "email": "nuevo.usuario@uajs.edu.co",
+  "password": "{{password}}"
+}
+
+### ===================================================================
+### 4. PERFIL DEL USUARIO AUTENTICADO (ME)
+### Requiere el accessToken del login.
+### Retorna el perfil completo: datos personales, roles, módulos RBAC
+### y vinculación académica si es docente o estudiante.
+### ===================================================================
+
+### 4.1 Perfil de Super Administrador (Directo puerto 3001)
+GET {{base}}/api/v1/auth/me
+Content-Type: {{contentType}}
+Authorization: Bearer {{loginAdmin.response.body.data.accessToken}}
+
+### 4.2 Perfil de Docente
+GET {{base}}/api/v1/auth/me
+Content-Type: {{contentType}}
+Authorization: Bearer {{loginDocente.response.body.data.accessToken}}
+
+### 4.3 Perfil de Estudiante
 GET {{base}}/api/v1/auth/me
 Content-Type: {{contentType}}
 Authorization: Bearer {{loginEstudiante.response.body.data.accessToken}}
 
-### Variante docente: registrar docente (crea usuario con rol TEACHER).
-### Requiere un tercero distinto (otra persona) y una facultad existente.
-
-# @name crearDocente
-POST {{university}}/api/v1/universidad/docentes
+### 4.4 Perfil vía API Gateway (Puerto 3000)
+GET {{gateway}}/api/v1/auth/me
 Content-Type: {{contentType}}
+Authorization: Bearer {{loginAdmin.response.body.data.accessToken}}
 
-{
-  "personaId": 1,
-  "facultadId": 1,
-  "codigoDocente": "DOC-2026-0001",
-  "tipoContrato": "full_time",
-  "fechaContratacion": "2026-01-10",
-  "tituloAcademico": "Doctorado en Ciencias de la Computación",
-  "estado": "active",
-  "password": "NuevaPassword.2026",
-  "activo": true
-}
+### ===================================================================
+### 5. REFRESH TOKEN (RENOVAR ACCESSTOKEN)
+### Genera un nuevo accessToken utilizando el refreshToken válido.
+### ===================================================================
 
-### ============================================
-### REFRESH TOKEN
-### Usa el refreshToken devuelto por LOGIN automáticamente.
-### ============================================
-
+# @name refreshToken
 POST {{base}}/api/v1/auth/refresh
 Content-Type: {{contentType}}
 
 {
-  "refreshToken": "{{login.response.body.data.refreshToken}}"
+  "refreshToken": "{{loginAdmin.response.body.data.refreshToken}}"
 }
 
-### ============================================
-### LOGOUT (CERRAR SESIÓN)
-### Invalida el refreshToken en la tabla `refresh_tokens`.
-### ============================================
+### ===================================================================
+### 6. RECUPERACIÓN DE CONTRASEÑA (PASSWORD RESET)
+### ===================================================================
+
+### 6.1 Solicitar restablecimiento de contraseña
+# @name requestPasswordReset
+POST {{base}}/api/v1/auth/password-reset
+Content-Type: {{contentType}}
+
+{
+  "email": "admin@uajs.edu.co"
+}
+
+### 6.2 Confirmar restablecimiento con token
+### (Reemplazar TOKEN_RECIBIDO con el token generado en password_reset_tokens o log)
+POST {{base}}/api/v1/auth/password-reset/confirm
+Content-Type: {{contentType}}
+
+{
+  "token": "TOKEN_RECIBIDO",
+  "password": "NuevaPassword2026!"
+}
+
+### ===================================================================
+### 7. LOGOUT (CERRAR SESIÓN)
+### Revoca el refreshToken en la tabla refresh_tokens de uajs_auth.
+### ===================================================================
 
 POST {{base}}/api/v1/auth/logout
 Content-Type: {{contentType}}
 
 {
-  "refreshToken": "{{login.response.body.data.refreshToken}}"
-}
-
-### ============================================
-### SOLICITAR RESET DE CONTRASEÑA
-### ============================================
-
-POST {{base}}/api/v1/auth/password-reset
-Content-Type: {{contentType}}
-
-{
-  "email": "mdarwin1992@hotmail.com"
-}
-
-### ============================================
-### CONFIRMAR RESET DE CONTRASEÑA
-### Pegar el token del email (o del log de BullMQ)
-### ============================================
-
-POST {{base}}/api/v1/auth/password-reset/confirm
-Content-Type: {{contentType}}
-
-{
-  "token": "PEGA_AQUI_EL_TOKEN_DE_RESET",
-  "password": "NuevaPassword.2026"
+  "refreshToken": "{{loginAdmin.response.body.data.refreshToken}}"
 }
