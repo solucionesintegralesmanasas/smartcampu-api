@@ -1,6 +1,6 @@
 ### ============================================
 ### CATALOG SERVICE - Pruebas de Endpoints
-### Servidor: apps/catalog-service (puerto 3002)
+### Servidor: apps/catalog-service (puerto 3003)
 ### ============================================
 
 ### Variables - Cambia el host según tu entorno
@@ -18,39 +18,41 @@ Content-Type: {{contentType}}
 ### DEPARTMENTS (Departamentos)
 ### ============================================
 
-### Listar departamentos (paginado)
+### Listar departamentos (paginado - Colombia cuenta con 33)
 GET {{base}}/api/v1/catalog/departments?page=1&limit=50
 Content-Type: {{contentType}}
 
-### Crear departamento
+### Crear departamento (utiliza nombre y código no sembrados)
 # @name createDepartment
 POST {{base}}/api/v1/catalog/departments
 Content-Type: {{contentType}}
 
 {
-  "name": "Antioquia",
-  "daneCode": "05"
+  "countryId": 1,
+  "name": "Departamento De Prueba",
+  "daneCode": "99"
 }
 
 ### Buscar departamentos por texto
-GET {{base}}/api/v1/catalog/departments/search?search=Antioquia
+GET {{base}}/api/v1/catalog/departments/search?search=Arauca
 Content-Type: {{contentType}}
 
-### Obtener departamento por ID
+### Obtener departamento por ID (ID 1: Antioquia)
 GET {{base}}/api/v1/catalog/departments/1
 Content-Type: {{contentType}}
 
-### Actualizar departamento
+### Actualizar departamento (ID 1)
 PUT {{base}}/api/v1/catalog/departments/1
 Content-Type: {{contentType}}
 
 {
-  "name": "Antioquia Actualizado",
+  "countryId": 1,
+  "name": "Antioquia",
   "daneCode": "05"
 }
 
-### Eliminar departamento (soft delete)
-DELETE {{base}}/api/v1/catalog/departments/1
+### Eliminar departamento (soft delete - cambiar ID según el recién creado)
+DELETE {{base}}/api/v1/catalog/departments/34
 Content-Type: {{contentType}}
 
 ### ============================================
@@ -61,9 +63,31 @@ Content-Type: {{contentType}}
 GET {{base}}/api/v1/catalog/cities?page=1&limit=10
 Content-Type: {{contentType}}
 
-### Crear ciudad
+### Crear ciudad (utiliza nombre no sembrado para evitar conflicto único con stateId)
 # @name createCity
 POST {{base}}/api/v1/catalog/cities
+Content-Type: {{contentType}}
+
+{
+  "stateId": 1,
+  "name": "Municipio De Prueba",
+  "daneCode": "05999"
+}
+
+### Buscar ciudades por texto
+GET {{base}}/api/v1/catalog/cities/search?search=Medellín
+Content-Type: {{contentType}}
+
+### Ciudades por departamento (State 1: Antioquia)
+GET {{base}}/api/v1/catalog/cities/state/1
+Content-Type: {{contentType}}
+
+### Obtener ciudad por ID (ID 1: Medellín)
+GET {{base}}/api/v1/catalog/cities/1
+Content-Type: {{contentType}}
+
+### Actualizar ciudad (ID 1)
+PUT {{base}}/api/v1/catalog/cities/1
 Content-Type: {{contentType}}
 
 {
@@ -72,30 +96,8 @@ Content-Type: {{contentType}}
   "daneCode": "05001"
 }
 
-### Buscar ciudades por texto
-GET {{base}}/api/v1/catalog/cities/search?search=Medellín
-Content-Type: {{contentType}}
-
-### Ciudades por departamento
-GET {{base}}/api/v1/catalog/cities/state/1
-Content-Type: {{contentType}}
-
-### Obtener ciudad por ID
-GET {{base}}/api/v1/catalog/cities/1
-Content-Type: {{contentType}}
-
-### Actualizar ciudad
-PUT {{base}}/api/v1/catalog/cities/1
-Content-Type: {{contentType}}
-
-{
-  "stateId": 1,
-  "name": "Medellín Actualizado",
-  "daneCode": "05001"
-}
-
-### Eliminar ciudad (soft delete)
-DELETE {{base}}/api/v1/catalog/cities/1
+### Eliminar ciudad (soft delete - cambiar ID según el registro creado)
+DELETE {{base}}/api/v1/catalog/cities/137
 Content-Type: {{contentType}}
 
 ### ============================================
@@ -113,36 +115,36 @@ Content-Type: {{contentType}}
 
 {
   "cityId": 1,
-  "name": "Sede Principal",
-  "address": "Calle 123 # 45-67",
-  "phone": "6041234567"
+  "name": "Campus Metropolitano Norte",
+  "address": "Calle 100 # 20-30",
+  "phone": "6045550000"
 }
 
 ### Buscar sedes por texto
-GET {{base}}/api/v1/catalog/campuses/search?search=Principal
+GET {{base}}/api/v1/catalog/campuses/search?search=Robledo
 Content-Type: {{contentType}}
 
-### Sedes por ciudad
+### Sedes por ciudad (City 1: Medellín)
 GET {{base}}/api/v1/catalog/campuses/city/1
 Content-Type: {{contentType}}
 
-### Obtener sede por ID
+### Obtener sede por ID (ID 1: Campus Robledo - Sede Medellín)
 GET {{base}}/api/v1/catalog/campuses/1
 Content-Type: {{contentType}}
 
-### Actualizar sede
+### Actualizar sede (ID 1)
 PUT {{base}}/api/v1/catalog/campuses/1
 Content-Type: {{contentType}}
 
 {
   "cityId": 1,
-  "name": "Sede Principal Actualizada",
-  "address": "Calle 123 # 45-67",
-  "phone": "6041234567"
+  "name": "Campus Robledo - Sede Medellín",
+  "address": "Carrera 80 # 65-223",
+  "phone": "+57 604 4309000"
 }
 
-### Eliminar sede (soft delete)
-DELETE {{base}}/api/v1/catalog/campuses/1
+### Eliminar sede (soft delete - cambiar ID según la sede creada)
+DELETE {{base}}/api/v1/catalog/campuses/4
 Content-Type: {{contentType}}
 
 ### ============================================
@@ -153,9 +155,27 @@ Content-Type: {{contentType}}
 GET {{base}}/api/v1/catalog/document-types?page=1&limit=10
 Content-Type: {{contentType}}
 
-### Crear tipo de documento
+### Crear tipo de documento (código PET para no colisionar con CC, TI, etc.)
 # @name createDocumentType
 POST {{base}}/api/v1/catalog/document-types
+Content-Type: {{contentType}}
+
+{
+  "name": "Permiso Especial Temporal",
+  "code": "PET",
+  "requiresCheckDigit": false
+}
+
+### Buscar tipos de documento por texto
+GET {{base}}/api/v1/catalog/document-types/search?search=Cédula
+Content-Type: {{contentType}}
+
+### Obtener tipo de documento por ID (ID 1: CC)
+GET {{base}}/api/v1/catalog/document-types/1
+Content-Type: {{contentType}}
+
+### Actualizar tipo de documento (ID 1)
+PUT {{base}}/api/v1/catalog/document-types/1
 Content-Type: {{contentType}}
 
 {
@@ -164,24 +184,6 @@ Content-Type: {{contentType}}
   "requiresCheckDigit": false
 }
 
-### Buscar tipos de documento por texto
-GET {{base}}/api/v1/catalog/document-types/search?search=Cédula
-Content-Type: {{contentType}}
-
-### Obtener tipo de documento por ID
-GET {{base}}/api/v1/catalog/document-types/1
-Content-Type: {{contentType}}
-
-### Actualizar tipo de documento
-PUT {{base}}/api/v1/catalog/document-types/1
-Content-Type: {{contentType}}
-
-{
-  "name": "Cédula de Ciudadanía",
-  "code": "CC",
-  "requiresCheckDigit": true
-}
-
-### Eliminar tipo de documento (soft delete)
-DELETE {{base}}/api/v1/catalog/document-types/1
+### Eliminar tipo de documento (soft delete - cambiar ID según el creado)
+DELETE {{base}}/api/v1/catalog/document-types/7
 Content-Type: {{contentType}}
