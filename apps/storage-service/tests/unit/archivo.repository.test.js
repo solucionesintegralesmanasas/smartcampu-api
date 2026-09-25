@@ -302,7 +302,10 @@ describe('ArchivoRepository', () => {
       await repo.searchInElasticsearch({ search: 'q', offset: 0, limit: 5 });
 
       const params = esClient.search.mock.calls[0][0];
-      expect(params.query.bool.must[0].multi_match.query).toBe('q');
+      const matchQuery = params.query.bool.must[0].bool
+        ? params.query.bool.must[0].bool.should[0].multi_match.query
+        : params.query.bool.must[0].multi_match.query;
+      expect(matchQuery).toBe('q');
       expect(params.query.bool.filter).toHaveLength(0);
     });
   });
