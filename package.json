@@ -23,6 +23,8 @@
     "docker:logs": "docker compose -f infrastructure/docker/docker-compose.yml logs -f",
     "es:setup": "node scripts/elasticsearch/setup.js",
     "es:status": "node scripts/elasticsearch/setup.js --status",
+    "db:seed": "node scripts/seed/run-all-seeds.js",
+    "db:fresh": "node scripts/seed/run-all-seeds.js --clean",
     "clean": "turbo run clean && rm -rf node_modules",
     "prepare": "husky install"
   },

@@ -215,7 +215,7 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
     device_info     VARCHAR(255)    NULL COMMENT 'Instantánea del User-Agent',
     ip_address      VARCHAR(45)     NULL COMMENT 'Dirección IP de origen',
     issued_at       TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Fecha de emisión',
-    expires_at      TIMESTAMP       NOT NULL COMMENT 'Fecha de expiración',
+    expires_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Fecha de expiración',
     revoked_at      TIMESTAMP       NULL COMMENT 'Fecha de revocación',
     revoke_reason   VARCHAR(50)     NULL COMMENT 'Motivo: logout|rotation|theft|admin',
     --
@@ -241,7 +241,7 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
     id          INT UNSIGNED    NOT NULL AUTO_INCREMENT COMMENT 'Identificador único interno',
     email       VARCHAR(150)    NOT NULL COMMENT 'Correo del usuario solicitante',
     token_hash  VARCHAR(255)    NOT NULL COMMENT 'SHA-256 del OTP crudo',
-    expires_at  TIMESTAMP       NOT NULL COMMENT 'Fecha de expiración',
+    expires_at  TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Fecha de expiración',
     used_at     TIMESTAMP       NULL COMMENT 'Fecha de uso del token',
     created_at  TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Fecha y hora de creación',
     --
@@ -261,7 +261,7 @@ CREATE TABLE IF NOT EXISTS email_verification_tokens (
     id          INT UNSIGNED    NOT NULL AUTO_INCREMENT COMMENT 'Identificador único interno',
     user_id     INT UNSIGNED    NOT NULL COMMENT 'Usuario propietario del token',
     token_hash  VARCHAR(255)    NOT NULL COMMENT 'Hash del token de verificación',
-    expires_at  TIMESTAMP       NOT NULL COMMENT 'Fecha de expiración',
+    expires_at  TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Fecha de expiración',
     verified_at TIMESTAMP       NULL COMMENT 'Fecha de verificación efectiva',
     created_at  TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Fecha y hora de creación',
     --

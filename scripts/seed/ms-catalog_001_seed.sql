@@ -243,4 +243,19 @@ ON DUPLICATE KEY UPDATE
     applies_to_legal_entity   = VALUES(applies_to_legal_entity),
     is_active                 = VALUES(is_active);
 
+-- ------------------------------------------------------------
+-- campuses (Sedes / Campus universitarios)
+-- ------------------------------------------------------------
+INSERT INTO campuses (id, uuid, city_id, name, address, phone, is_active)
+VALUES
+    (1, UUID(), 1,   'Campus Robledo - Sede Medellín',  'Carrera 80 # 65-223', '+57 604 4309000', 1),
+    (2, UUID(), 18,  'Campus Salitre - Sede Bogotá',    'Calle 26 # 69D-91',   '+57 601 3165000', 1),
+    (3, UUID(), 108, 'Campus Principal Bucaramanga',    'Carrera 27 # 9-01',   '+57 607 6344000', 1)
+ON DUPLICATE KEY UPDATE
+    city_id   = VALUES(city_id),
+    name      = VALUES(name),
+    address   = VALUES(address),
+    phone     = VALUES(phone),
+    is_active = VALUES(is_active);
+
 SET FOREIGN_KEY_CHECKS = 1;

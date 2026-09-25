@@ -25,11 +25,11 @@ SET time_zone = '+00:00';
 -- ------------------------------------------------------------
 INSERT INTO roles (id, uuid, name, guard_name, description, is_system)
 VALUES
-    (1, UUID(), 'SUPERADMIN', 'api', 'Acceso total al sistema. Rol de sistema no eliminable.', 1),
-    (2, UUID(), 'ADMIN',      'api', 'Administrador general de la plataforma.', 1),
-    (3, UUID(), 'STUDENT',    'api', 'Estudiante de la institución.', 1),
-    (4, UUID(), 'TEACHER',    'api', 'Docente de la institución.', 1),
-    (5, UUID(), 'STAFF',      'api', 'Personal administrativo.', 1)
+    (1, UUID(), 'SUPER_ADMINISTRADOR', 'api', 'Acceso total al sistema. Rol de sistema no eliminable.', 1),
+    (2, UUID(), 'ADMINISTRADOR',      'api', 'Administrador general de la plataforma.', 1),
+    (3, UUID(), 'ESTUDIANTE',    'api', 'Estudiante de la institución.', 1),
+    (4, UUID(), 'DOCENTE',    'api', 'Docente de la institución.', 1),
+    (5, UUID(), 'PERSONAL',      'api', 'Personal administrativo.', 1)
 ON DUPLICATE KEY UPDATE
     guard_name  = VALUES(guard_name),
     description = VALUES(description),
