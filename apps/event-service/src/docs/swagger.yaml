@@ -1,0 +1,232 @@
+openapi: 3.0.0
+info:
+  title: API de Eventos (event-service)
+  version: 1.0.0
+  description: >
+    Gestión de eventos institucionales y sus inscripciones. La consulta de eventos es pública;
+    la gestión requiere rol ADMIN o STAFF. Las inscripciones requieren usuario autenticado.
+servers:
+  - url: /api/v1/eventos
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string }
+    Meta:
+      type: object
+      properties:
+        page: { type: integer, example: 1 }
+        limit: { type: integer, example: 20 }
+        total: { type: integer, example: 42 }
+        totalPages: { type: integer, example: 3 }
+    Evento:
+      type: object
+      properties:
+        uuid: { type: string, format: uuid }
+        titulo: { type: string }
+        descripcion: { type: string, nullable: true }
+        lugar: { type: string, nullable: true }
+        fechaInicio: { type: string, format: date-time }
+        fechaFin: { type: string, format: date-time }
+        capacidadMaxima: { type: integer, nullable: true }
+        costo: { type: number }
+        requiereInscripcion: { type: boolean }
+        fechaLimiteInscripcion: { type: string, format: date-time, nullable: true }
+        estado: { type: string, enum: [draft, published, ongoing, completed, cancelled] }
+        categoria:
+          type: object
+          properties:
+            uuid: { type: string, format: uuid }
+            codigo: { type: string }
+            nombre: { type: string }
+        organizador:
+          type: object
+          properties:
+            uuid: { type: string }
+            nombre: { type: string }
+    Inscripcion:
+      type: object
+      properties:
+        uuid: { type: string, format: uuid }
+        registrante:
+          type: object
+          properties:
+            uuid: { type: string }
+            nombre: { type: string }
+        estado: { type: string }
+        fechaRegistro: { type: string, format: date-time }
+paths:
+  /categorias:
+    get:
+      tags: [Catálogos]
+      summary: Lista las categorías de eventos
+      responses:
+        '200': { description: Lista de categorías }
+  /estados:
+    get:
+      tags: [Catálogos]
+      summary: Lista los estados de eventos
+      responses:
+        '200': { description: Lista de estados }
+  /:
+    get:
+      tags: [Eventos]
+      summary: Lista eventos (los usuarios sin gestión solo ven los públicos)
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, default: 20 } }
+        - { in: query, name: estado, schema: { type: string, enum: [draft, published, ongoing, completed, cancelled] } }
+        - { in: query, name: categoriaUuid, schema: { type: string, format: uuid } }
+        - { in: query, name: fechaDesde, schema: { type: string, format: date-time } }
+        - { in: query, name: fechaHasta, schema: { type: string, format: date-time } }
+      responses:
+        '200':
+          description: Lista paginada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Evento' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+    post:
+      tags: [Eventos]
+      summary: Crea un evento en borrador (ADMIN o STAFF)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [titulo, categoriaUuid, sedeUuid, sedeNombre, fechaInicio, fechaFin]
+              properties:
+                titulo: { type: string }
+                descripcion: { type: string, nullable: true }
+                lugar: { type: string, nullable: true }
+                categoriaUuid: { type: string, format: uuid }
+                sedeUuid: { type: string, format: uuid }
+                sedeNombre: { type: string }
+                fechaInicio: { type: string, format: date-time }
+                fechaFin: { type: string, format: date-time }
+                capacidadMaxima: { type: integer, nullable: true }
+                costo: { type: number }
+                requiereInscripcion: { type: boolean }
+                fechaLimiteInscripcion: { type: string, format: date-time, nullable: true }
+      responses:
+        '201': { description: Evento creado }
+  /{uuid}:
+    get:
+      tags: [Eventos]
+      summary: Detalle de un evento
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - { in: path, name: uuid, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Detalle
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: '#/components/schemas/Evento' }
+        '404': { description: No encontrado }
+    put:
+      tags: [Eventos]
+      summary: Actualiza un evento (ADMIN o STAFF)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: path, name: uuid, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Evento actualizado }
+        '409': { description: No editable en su estado actual }
+    delete:
+      tags: [Eventos]
+      summary: Elimina (soft delete) un evento en borrador (ADMIN o STAFF)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: path, name: uuid, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Evento eliminado }
+  /{uuid}/estado:
+    patch:
+      tags: [Eventos]
+      summary: Cambia el estado del evento (ADMIN o STAFF). Al publicar emite EventoProgramadoEvent
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: path, name: uuid, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [estado]
+              properties:
+                estado: { type: string, enum: [draft, published, ongoing, completed, cancelled] }
+      responses:
+        '200': { description: Estado actualizado }
+        '409': { description: Transición no permitida }
+  /{uuid}/inscripciones:
+    post:
+      tags: [Inscripciones]
+      summary: Inscribe al usuario autenticado (control de aforo)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: path, name: uuid, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '201': { description: Inscripción registrada }
+        '409': { description: Aforo lleno, duplicado o plazo cerrado }
+    get:
+      tags: [Inscripciones]
+      summary: Lista las inscripciones del evento (ADMIN o STAFF)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: path, name: uuid, required: true, schema: { type: string, format: uuid } }
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, default: 20 } }
+      responses:
+        '200':
+          description: Lista paginada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Inscripcion' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+    delete:
+      tags: [Inscripciones]
+      summary: Cancela la inscripción del usuario autenticado
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: path, name: uuid, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Inscripción cancelada }
