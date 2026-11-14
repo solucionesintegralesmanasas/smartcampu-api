@@ -1,0 +1,246 @@
+openapi: 3.0.0
+info:
+  title: API de Notificaciones (notification-service)
+  version: 1.0.0
+  description: >
+    Notificaciones multicanal (in-app, correo y push) generadas a partir de eventos de dominio.
+    Todas las rutas requieren Bearer JWT. La gestión de plantillas y las difusiones requieren
+    rol ADMIN o STAFF.
+servers:
+  - url: /api/v1/notificaciones
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string }
+    Meta:
+      type: object
+      properties:
+        page: { type: integer, example: 1 }
+        limit: { type: integer, example: 20 }
+        total: { type: integer, example: 42 }
+        totalPages: { type: integer, example: 3 }
+    Notificacion:
+      type: object
+      properties:
+        uuid: { type: string, format: uuid }
+        asunto: { type: string }
+        cuerpo: { type: string }
+        canal: { type: string, enum: [in_app, email, push, sms] }
+        estado: { type: string, enum: [queued, sending, delivered, failed, read] }
+        leida: { type: boolean }
+        esDifusion: { type: boolean }
+        creadaEn: { type: string, format: date-time }
+    Preferencia:
+      type: object
+      properties:
+        categoria: { type: string, enum: [request, booking, event, pqrs] }
+        canal: { type: string, enum: [email, push] }
+        habilitado: { type: boolean }
+    Plantilla:
+      type: object
+      properties:
+        code: { type: string, example: request.created }
+        name: { type: string }
+        channel: { type: string }
+        subject: { type: string, nullable: true }
+        bodyText: { type: string }
+        bodyHtml: { type: string, nullable: true }
+        variables:
+          type: array
+          items: { type: string }
+        isActive: { type: boolean }
+paths:
+  /:
+    get:
+      tags: [Notificaciones]
+      summary: Lista las notificaciones in-app del usuario (incluye difusiones)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, default: 20 } }
+        - { in: query, name: leida, schema: { type: boolean } }
+      responses:
+        '200':
+          description: Lista paginada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Notificacion' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+  /leer-todas:
+    patch:
+      tags: [Notificaciones]
+      summary: Marca como leídas todas las notificaciones del usuario
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Cantidad actualizada
+  /{uuid}/leida:
+    patch:
+      tags: [Notificaciones]
+      summary: Marca una notificación como leída
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: path, name: uuid, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Notificación marcada como leída
+        '404':
+          description: No encontrada
+  /difusion:
+    post:
+      tags: [Notificaciones]
+      summary: Crea una difusión manual a la comunidad (ADMIN o STAFF)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [titulo, mensaje]
+              properties:
+                titulo: { type: string }
+                mensaje: { type: string }
+      responses:
+        '201':
+          description: Difusión creada
+  /preferencias:
+    get:
+      tags: [Preferencias]
+      summary: Obtiene las preferencias de notificación del usuario
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Matriz de preferencias
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Preferencia' }
+    put:
+      tags: [Preferencias]
+      summary: Actualiza las preferencias de notificación del usuario
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [preferencias]
+              properties:
+                preferencias:
+                  type: array
+                  items: { $ref: '#/components/schemas/Preferencia' }
+      responses:
+        '200':
+          description: Preferencias actualizadas
+  /suscripciones-push:
+    post:
+      tags: [Suscripciones]
+      summary: Registra (o reactiva) una suscripción push del dispositivo
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [endpoint, authKey, p256dhKey, deviceType]
+              properties:
+                endpoint: { type: string, format: uri }
+                authKey: { type: string }
+                p256dhKey: { type: string }
+                deviceType: { type: string, enum: [web, android, ios] }
+                deviceLabel: { type: string, nullable: true }
+      responses:
+        '201':
+          description: Suscripción registrada
+  /suscripciones-push/{uuid}:
+    delete:
+      tags: [Suscripciones]
+      summary: Elimina una suscripción push del usuario
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: path, name: uuid, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Suscripción eliminada
+        '404':
+          description: No encontrada
+  /plantillas:
+    get:
+      tags: [Plantillas]
+      summary: Lista las plantillas de notificación (ADMIN o STAFF)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, default: 20 } }
+      responses:
+        '200':
+          description: Lista paginada de plantillas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Plantilla' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+  /plantillas/{code}:
+    put:
+      tags: [Plantillas]
+      summary: Crea o actualiza una plantilla por código (ADMIN)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: path, name: code, required: true, schema: { type: string, example: request.created } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, channel, bodyText]
+              properties:
+                name: { type: string }
+                channel: { type: string, enum: [in_app, email, push, sms] }
+                subject: { type: string, nullable: true }
+                bodyText: { type: string }
+                bodyHtml: { type: string, nullable: true }
+                variables:
+                  type: array
+                  items: { type: string }
+                isActive: { type: boolean }
+      responses:
+        '200':
+          description: Plantilla guardada
