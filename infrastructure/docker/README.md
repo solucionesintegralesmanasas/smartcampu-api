@@ -14,7 +14,7 @@ Este directorio contiene la configuración para levantar el entorno de desarroll
 ```
 docker/
 ├── init/                 # Scripts de inicialización de bases de datos
-│   └── 01-schema.sql     # Script SQL completo (35+ tablas)
+│   └── init-databases.sh # Aplica las migraciones ms-*_001_init.sql por servicio
 ├── Dockerfile.base       # Imagen base compartida para todos los servicios
 ├── docker-compose.yml    # Orquestación de todos los servicios
 └── README.md             # Este archivo
@@ -112,9 +112,12 @@ docker exec -it uajs-redis redis-cli
 
 Cada servicio expone el endpoint `/health`. Docker Compose los utiliza para determinar si el servicio está listo antes de iniciar dependencias.
 
-## Base de datos de pruebas
+## Base de datos
 
-El script `01-schema.sql` crea automáticamente la base de datos `uajs_smart_campus_test` con el mismo esquema. Esta base se usa para ejecutar pruebas de integración.
+La arquitectura es **database-per-service**: cada microservicio posee su propia base de datos.
+Las migraciones viven en `scripts/migrations/ms-*_001_init.sql` y se aplican automáticamente en el
+primer arranque del contenedor MySQL mediante `init/init-databases.sh`. Para ejecutarlas manualmente
+existe el runner `scripts/migrations/migrate.js` (ver la sección de migraciones).
 
 ## Migraciones
 

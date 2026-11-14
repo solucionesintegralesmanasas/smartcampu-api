@@ -66,10 +66,16 @@
 │                  │                 │  event_statuses, events,        │
 │                  │                 │  event_registrations            │
 ├──────────────────┼─────────────────┼────────────────────────────────┤
-│  uajs_notif.     │  ms-notif.      │  notification_templates,        │
+│  uajs_notifications │ ms-notifications │  notification_templates,     │
 │                  │                 │  notifications,                 │
 │                  │                 │  user_notification_preferences, │
 │                  │                 │  push_subscriptions             │
+├──────────────────┼─────────────────┼────────────────────────────────┤
+│  uajs_pqrs       │  ms-pqrs        │  pqrs_types, pqrs_statuses,     │
+│                  │                 │  pqrs, pqrs_responses,          │
+│                  │                 │  pqrs_audit_trail               │
+├──────────────────┼─────────────────┼────────────────────────────────┤
+│  uajs_storage    │  ms-storage     │  archivos                       │
 └──────────────────┴─────────────────┴────────────────────────────────┘
 ```
 
@@ -137,18 +143,28 @@ draft ──► published ──► ongoing ──► completed
 
 ## Deployment
 
-### Apply all schemas (Docker Compose)
+### Aplicar migraciones
 
 ```bash
-for db in ms-catalog ms-auth ms-academic ms-resources ms-bookings ms-requests ms-events ms-notifications; do
-  mysql -h 127.0.0.1 -P 3306 -u root -p < ./${db}/001_init.sql
-  echo "✓ ${db} applied"
-done
+npm run db:migrate          # node scripts/migrations/migrate.js up
+npm run db:migrate:status   # node scripts/migrations/migrate.js status
+node scripts/migrations/migrate.js down 1   # elimina el registro de la última migración
 ```
 
-### Individual Kubernetes init-container pattern
+El runner lee cada `ms-*_001_init.sql`, detecta su base destino a partir de `CREATE DATABASE` y registra la migración en la tabla `_migrations` de esa base. Si un archivo cambia después de aplicarse, lo reporta mediante checksum. Las migraciones son idempotentes, así que reintentar tras un fallo es seguro.
 
-Each service's Helm chart mounts its own `001_init.sql` as a ConfigMap and runs it as an init-container before the service pod starts.
+Variables: `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_ROOT_USER` (default `root`), `MYSQL_ROOT_PASSWORD`. Se usa root porque las migraciones crean bases de datos.
+
+### Datos de referencia
+
+```bash
+npm run db:seed          # migraciones + seeds en orden de dependencia
+npm run db:fresh         # elimina todas las bases de microservicios y vuelve a sembrar
+```
+
+### Kubernetes init-container pattern
+
+Cada chart de Helm ejecuta `migrate.js up` como init-container antes de iniciar el pod del servicio, con las credenciales de migración.
 
 ---
 

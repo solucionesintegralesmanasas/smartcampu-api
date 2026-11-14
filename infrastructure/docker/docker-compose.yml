@@ -128,11 +128,9 @@ services:
       - uajs-network
 
   # ======================================================
-  # Microservicios implementados (5 de 12)
-  # NOTA: booking, event, notification, pqrs, request,
-  # resource y user están VACÍOS
-  # (solo estructura de carpetas, sin código) y no se
-  # levantan hasta que se implementen.
+  # Microservicios implementados (12 de 12)
+  # auth, catalog, university, storage, user, resource,
+  # booking, request, event, notification, pqrs y gateway.
   # ======================================================
   api-gateway:
     build:
@@ -194,6 +192,22 @@ services:
       catalog-service:
         condition: service_started
       university-service:
+        condition: service_started
+      user-service:
+        condition: service_started
+      resource-service:
+        condition: service_started
+      booking-service:
+        condition: service_started
+      request-service:
+        condition: service_started
+      event-service:
+        condition: service_started
+      notification-service:
+        condition: service_started
+      pqrs-service:
+        condition: service_started
+      storage-service:
         condition: service_started
     healthcheck:
       test:
@@ -408,6 +422,343 @@ services:
     healthcheck:
       test:
         ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3011/healthz']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - uajs-network
+
+  user-service:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.base
+    image: uajs-base
+    container_name: uajs-user
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ../../:/app
+      - /app/node_modules
+    command: npx nodemon apps/user-service/src/server.js
+    environment:
+      PORT: 3002
+      NODE_ENV: development
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: uajs_users
+      MYSQL_USER: ${MYSQL_USER:-uajs_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-uajs206**}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-uajs_dev_jwt_secret_1234567890abcdefghijklmnopqrstuvwxyz_extra_long_654321}
+      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN:-uajs_service_token_2024}
+      ELASTICSEARCH_HOST: elasticsearch
+      ELASTICSEARCH_PORT: '9200'
+      ELASTICSEARCH_USER: elastic
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-changeme}
+      USER_INDEX: uajs_users
+    ports:
+      - '3002:3002'
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3002/healthz']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - uajs-network
+
+  resource-service:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.base
+    image: uajs-base
+    container_name: uajs-resource
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ../../:/app
+      - /app/node_modules
+    command: npx nodemon apps/resource-service/src/server.js
+    environment:
+      PORT: 3005
+      NODE_ENV: development
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: uajs_resources
+      MYSQL_USER: ${MYSQL_USER:-uajs_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-uajs206**}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-uajs_dev_jwt_secret_1234567890abcdefghijklmnopqrstuvwxyz_extra_long_654321}
+      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN:-uajs_service_token_2024}
+      ELASTICSEARCH_HOST: elasticsearch
+      ELASTICSEARCH_PORT: '9200'
+      ELASTICSEARCH_USER: elastic
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-changeme}
+      RESOURCE_QUEUE: resource_events
+    ports:
+      - '3005:3005'
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3005/healthz']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - uajs-network
+
+  booking-service:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.base
+    image: uajs-base
+    container_name: uajs-booking
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ../../:/app
+      - /app/node_modules
+    command: npx nodemon apps/booking-service/src/server.js
+    environment:
+      PORT: 3006
+      NODE_ENV: development
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: uajs_bookings
+      MYSQL_USER: ${MYSQL_USER:-uajs_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-uajs206**}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-uajs_dev_jwt_secret_1234567890abcdefghijklmnopqrstuvwxyz_extra_long_654321}
+      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN:-uajs_service_token_2024}
+      SERVICE_RESOURCE_URL: http://resource-service:3005
+      RESOURCE_TIMEOUT_MS: 5000
+      ELASTICSEARCH_HOST: elasticsearch
+      ELASTICSEARCH_PORT: '9200'
+      ELASTICSEARCH_USER: elastic
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-changeme}
+    ports:
+      - '3006:3006'
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3006/healthz']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - uajs-network
+
+  request-service:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.base
+    image: uajs-base
+    container_name: uajs-request
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ../../:/app
+      - /app/node_modules
+    command: npx nodemon apps/request-service/src/server.js
+    environment:
+      PORT: 3007
+      NODE_ENV: development
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: uajs_requests
+      MYSQL_USER: ${MYSQL_USER:-uajs_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-uajs206**}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-uajs_dev_jwt_secret_1234567890abcdefghijklmnopqrstuvwxyz_extra_long_654321}
+      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN:-uajs_service_token_2024}
+      ELASTICSEARCH_HOST: elasticsearch
+      ELASTICSEARCH_PORT: '9200'
+      ELASTICSEARCH_USER: elastic
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-changeme}
+      HOLIDAYS: 2026-01-01,2026-05-01,2026-07-20,2026-12-25
+      CATALOG_CACHE_TTL: 3600
+    ports:
+      - '3007:3007'
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3007/healthz']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - uajs-network
+
+  event-service:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.base
+    image: uajs-base
+    container_name: uajs-event
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ../../:/app
+      - /app/node_modules
+    command: npx nodemon apps/event-service/src/server.js
+    environment:
+      PORT: 3008
+      NODE_ENV: development
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: uajs_events
+      MYSQL_USER: ${MYSQL_USER:-uajs_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-uajs206**}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-uajs_dev_jwt_secret_1234567890abcdefghijklmnopqrstuvwxyz_extra_long_654321}
+      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN:-uajs_service_token_2024}
+      ELASTICSEARCH_HOST: elasticsearch
+      ELASTICSEARCH_PORT: '9200'
+      ELASTICSEARCH_USER: elastic
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-changeme}
+      EVENTS_INDEX: uajs_events
+      CATALOG_CACHE_TTL: 3600
+    ports:
+      - '3008:3008'
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3008/healthz']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - uajs-network
+
+  notification-service:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.base
+    image: uajs-base
+    container_name: uajs-notification
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ../../:/app
+      - /app/node_modules
+    command: npx nodemon apps/notification-service/src/server.js
+    environment:
+      PORT: 3009
+      NODE_ENV: development
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: uajs_notifications
+      MYSQL_USER: ${MYSQL_USER:-uajs_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-uajs206**}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-uajs_dev_jwt_secret_1234567890abcdefghijklmnopqrstuvwxyz_extra_long_654321}
+      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN:-uajs_service_token_2024}
+      ELASTICSEARCH_HOST: elasticsearch
+      ELASTICSEARCH_PORT: '9200'
+      ELASTICSEARCH_USER: elastic
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-changeme}
+      NOTIFICATION_DELIVERY_QUEUE: uajs.notificaciones.entregas.v1
+      NOTIFICATION_WORKER_CONCURRENCY: 5
+      NOTIFICATION_CHANNEL_DRIVER: log
+      NOTIFICATION_IDEMPOTENCY_TTL: 604800
+      NOTIFICATION_EVENTS_INDEX: uajs_notifications_events
+    ports:
+      - '3009:3009'
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3009/healthz']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - uajs-network
+
+  pqrs-service:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.base
+    image: uajs-base
+    container_name: uajs-pqrs
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ../../:/app
+      - /app/node_modules
+    command: npx nodemon apps/pqrs-service/src/server.js
+    environment:
+      PORT: 3010
+      NODE_ENV: development
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: uajs_pqrs
+      MYSQL_USER: ${MYSQL_USER:-uajs_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-uajs206**}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-uajs_dev_jwt_secret_1234567890abcdefghijklmnopqrstuvwxyz_extra_long_654321}
+      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN:-uajs_service_token_2024}
+      ELASTICSEARCH_HOST: elasticsearch
+      ELASTICSEARCH_PORT: '9200'
+      ELASTICSEARCH_USER: elastic
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-changeme}
+      PQRS_INDEX: uajs_pqrs
+      HOLIDAYS: 2026-01-01,2026-05-01,2026-07-20,2026-12-25
+    ports:
+      - '3010:3010'
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3010/healthz']
       interval: 30s
       timeout: 5s
       retries: 3

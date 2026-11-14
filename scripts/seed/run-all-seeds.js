@@ -100,6 +100,8 @@ async function main() {
       'uajs_events',
       'uajs_requests',
       'uajs_notifications',
+      'uajs_pqrs',
+      'uajs_storage',
     ];
 
     const isFresh = process.argv.includes('--clean') || process.argv.includes('--fresh');
@@ -152,6 +154,8 @@ async function main() {
       'ms-events_001_init.sql',
       'ms-requests_001_init.sql',
       'ms-notifications_001_init.sql',
+      'ms-pqrs_001_init.sql',
+      'ms-storage_001_init.sql',
     ];
 
     for (const migration of migrations) {
@@ -170,6 +174,7 @@ async function main() {
       'ms-bookings_001_seed.sql', // Tipos y estados de reservas
       'ms-events_001_seed.sql', // Categorías y estados de eventos
       'ms-requests_001_seed.sql', // Categorías, tipos y estados de solicitudes
+      'ms-pqrs_001_seed.sql', // Tipos y estados de PQRS
       'ms-notifications_001_seed.sql', // Plantillas de notificación
     ];
 
