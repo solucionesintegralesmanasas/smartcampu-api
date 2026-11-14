@@ -1,51 +1,67 @@
 const { z } = require('zod');
 
 /**
- * Esquemas de validación Zod para el módulo de archivos.
+ * Extensiones permitidas para la carga de archivos.
  */
-const createFileMetadataSchema = z.object({
-  entidadAsociada: z.string().optional(),
-  uuidAsociado: z.string().uuid('UUID asociado inválido').optional(),
-  usuarioId: z.coerce.number().int().positive().optional(),
-  usuarioNombre: z.string().optional(),
-  carpeta: z.string().default('general'),
-  publico: z.coerce.boolean().default(false),
+const ALLOWED_EXTENSIONS = Object.freeze(['.pdf', '.jpg', '.jpeg', '.png', '.gif']);
+
+/**
+ * Los campos multipart llegan como texto ('true'/'false'); z.coerce.boolean()
+ * convertiría 'false' en true, por eso se parsea explícitamente.
+ */
+const flagSchema = z
+  .union([z.boolean(), z.enum(['true', 'false'])])
+  .transform((value) => value === true || value === 'true');
+
+const uuidParamSchema = z.object({
+  uuid: z.string().uuid('UUID inválido'),
 });
 
-const updateFileSchema = z.object({
-  nombreOriginal: z.string().min(1).max(255).optional(),
-  entidadAsociada: z.string().optional(),
-  uuidAsociado: z.string().uuid('UUID asociado inválido').optional(),
-  carpeta: z.string().optional(),
-  publico: z.coerce.boolean().optional(),
-  activo: z.coerce.boolean().optional(),
-});
+const createArchivoSchema = z
+  .object({
+    entidadAsociada: z.string().trim().min(1).max(50).optional(),
+    uuidAsociado: z.string().uuid('UUID asociado inválido').optional(),
+    carpeta: z.string().trim().min(1).max(100).default('general'),
+    publico: flagSchema.default(false),
+  })
+  .refine((data) => !data.uuidAsociado || Boolean(data.entidadAsociada), {
+    message: 'entidadAsociada es obligatoria cuando se envía uuidAsociado',
+    path: ['entidadAsociada'],
+  });
 
-const listFilesQuerySchema = z.object({
+const updateArchivoSchema = z
+  .object({
+    nombreOriginal: z.string().trim().min(1).max(255).optional(),
+    entidadAsociada: z.string().trim().min(1).max(50).nullable().optional(),
+    uuidAsociado: z.string().uuid('UUID asociado inválido').nullable().optional(),
+    carpeta: z.string().trim().min(1).max(100).optional(),
+    publico: flagSchema.optional(),
+    activo: flagSchema.optional(),
+  })
+  .refine((data) => Object.values(data).some((value) => value !== undefined), {
+    message: 'Debe enviar al menos un campo a actualizar',
+  });
+
+const listArchivosQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().max(100)
-    .default(20),
+  limit: z.coerce.number().int().positive().max(100).default(20),
   usuarioId: z.coerce.number().int().positive().optional(),
-  tipo: z.string().optional(),
-  entidad: z.string().optional(),
-  activo: z.coerce.boolean().optional(),
+  tipo: z.string().trim().min(1).optional(),
+  entidad: z.string().trim().min(1).max(50).optional(),
+  uuidAsociado: z.string().uuid('UUID asociado inválido').optional(),
+  carpeta: z.string().trim().min(1).max(100).optional(),
+  activo: flagSchema.optional(),
 });
 
-const searchFilesQuerySchema = z.object({
-  q: z.string().min(1, 'El término de búsqueda es requerido').optional(),
-  search: z.string().min(1, 'El término de búsqueda es requerido').optional(),
-  usuarioId: z.coerce.number().int().positive().optional(),
-  tipo: z.string().optional(),
-  entidad: z.string().optional(),
-  activo: z.coerce.boolean().optional(),
-  offset: z.coerce.number().int().min(0).default(0),
-  limit: z.coerce.number().int().positive().max(100)
-    .default(20),
+const buscarArchivosQuerySchema = listArchivosQuerySchema.extend({
+  search: z.string().trim().min(1, 'El término de búsqueda es requerido'),
 });
 
 module.exports = {
-  createFileMetadataSchema,
-  updateFileSchema,
-  listFilesQuerySchema,
-  searchFilesQuerySchema,
+  ALLOWED_EXTENSIONS,
+  createArchivoSchema,
+  updateArchivoSchema,
+  listArchivosQuerySchema,
+  buscarArchivosQuerySchema,
+  uuidParamSchema,
 };

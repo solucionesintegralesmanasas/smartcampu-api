@@ -1,3 +1,6 @@
+const fs = require('fs');
+const path = require('path');
+
 jest.mock('../../src/config/logger', () => ({
   info: jest.fn(),
   warn: jest.fn(),
@@ -5,307 +8,390 @@ jest.mock('../../src/config/logger', () => ({
   debug: jest.fn(),
 }));
 
-jest.mock('../../src/config/env', () => ({
-  env: {
-    NODE_ENV: 'test',
-    PORT: 3011,
-    MYSQL_HOST: 'localhost',
-    MYSQL_PORT: 3306,
-    MYSQL_USER: 'test',
-    MYSQL_PASSWORD: 'test',
-    MYSQL_DATABASE: 'test_storage_db',
-    REDIS_HOST: 'localhost',
-    REDIS_PORT: 6379,
-    ELASTICSEARCH_HOST: 'localhost',
-    ELASTICSEARCH_PORT: 9200,
-    STORAGE_QUEUE: 'test_storage_jobs',
-    STORAGE_INDEX: 'test_uajs_storage',
-    MAX_FILE_SIZE: 10485760,
-    UPLOAD_DIR: '/tmp/uploads-test',
-  },
-}));
-
-jest.mock('../../src/config/elasticsearch', () => ({
-  esClient: {
-    index: jest.fn(),
-    search: jest.fn(),
-    update: jest.fn(),
-    delete: jest.fn(),
-    bulk: jest.fn(),
-    client: {
-      indices: {
-        exists: jest.fn(),
-        create: jest.fn(),
-      },
+jest.mock('../../src/config/env', () => {
+  const os = require('os');
+  const pathModule = require('path');
+  return {
+    env: {
+      NODE_ENV: 'test',
+      MAX_FILE_SIZE: 1024 * 1024,
+      UPLOAD_DIR: pathModule.join(os.tmpdir(), 'uajs-storage-unit-service'),
+      STORAGE_INDEX: 'test_uajs_storage',
     },
-  },
-  ensureStorageIndex: jest.fn(),
-}));
+  };
+});
 
-const { esClient } = require('../../src/config/elasticsearch');
-const { NotFoundError } = require('../../src/core/exceptions');
+const logger = require('../../src/config/logger');
+const { env } = require('../../src/config/env');
 const {
-  ArchivoService,
-  fileFilter,
-  ALLOWED_EXTENSIONS,
-  upload,
-} = require('../../src/modules/archivo/archivo.service');
+  ForbiddenError,
+  NotFoundError,
+  UnauthorizedError,
+  ValidationError,
+} = require('../../src/core/exceptions');
+const ArchivoService = require('../../src/modules/archivo/archivo.service');
 
-const archivoFixture = {
+const UUID = '550e8400-e29b-41d4-a716-446655440000';
+
+const OWNER = { id: 10, nombre: 'Juan Perez', roles: ['STUDENT'] };
+const OTHER_TEACHER = { id: 11, nombre: 'Ana', roles: ['TEACHER'] };
+const STAFF = { id: 99, nombre: 'Staff', roles: ['STAFF'] };
+
+const archivoFixture = (overrides = {}) => ({
   id: 1,
-  uuid: '550e8400-e29b-41d4-a716-446655440000',
+  uuid: UUID,
   nombre_original: 'documento.pdf',
-  nombre_sistema: 'uuid-generado.pdf',
-  ruta_acceso: '/tmp/uploads-test/uuid-generado.pdf',
+  nombre_sistema: 'interno.pdf',
+  ruta_acceso: path.join(env.UPLOAD_DIR, 'interno.pdf'),
   mime_type: 'application/pdf',
   peso_bytes: 1024,
-  entidad_asociada: 'evento',
-  uuid_asociado: '660e8400-e29b-41d4-a716-446655440001',
+  extension: '.pdf',
+  entidad_asociada: null,
+  uuid_asociado: null,
   subido_por: 10,
   subido_por_nombre: 'Juan Perez',
-  extension: '.pdf',
-  carpeta: 'documentos',
-  publico: 0,
-  activo: 1,
+  carpeta: 'general',
+  publico: false,
+  activo: true,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
-};
+  ...overrides,
+});
 
-function mockRepository(overrides = {}) {
-  return {
-    create: jest.fn().mockResolvedValue(archivoFixture),
-    findById: jest.fn().mockResolvedValue(archivoFixture),
-    findByUuid: jest.fn().mockResolvedValue(archivoFixture),
-    findAll: jest.fn().mockResolvedValue({ files: [archivoFixture], total: 1 }),
-    update: jest.fn().mockResolvedValue(archivoFixture),
-    delete: jest.fn().mockResolvedValue({ success: true }),
-    searchInElasticsearch: jest.fn().mockResolvedValue({ total: 1, files: [archivoFixture] }),
-    ...overrides,
-  };
-}
-
-function mockFile(overrides = {}) {
+const buildFile = (overrides = {}) => {
+  const buffer = Buffer.from('%PDF-1.4 contenido de prueba');
   return {
     originalname: 'documento.pdf',
     mimetype: 'application/pdf',
-    size: 1024,
-    buffer: Buffer.from('fake-pdf-content'),
+    size: buffer.length,
+    buffer,
     ...overrides,
   };
-}
+};
+
+const mockRepository = (overrides = {}) => ({
+  create: jest.fn().mockResolvedValue(archivoFixture()),
+  findByUuid: jest.fn().mockResolvedValue(archivoFixture()),
+  findAll: jest.fn().mockResolvedValue({ files: [archivoFixture()], total: 1 }),
+  update: jest.fn().mockResolvedValue(archivoFixture({ carpeta: 'nueva' })),
+  delete: jest.fn().mockResolvedValue(true),
+  searchInElasticsearch: jest.fn().mockResolvedValue({ total: 1, files: [archivoFixture()] }),
+  ...overrides,
+});
+
+const mockProducer = (overrides = {}) => ({
+  indexFile: jest.fn().mockResolvedValue(undefined),
+  updateFileInES: jest.fn().mockResolvedValue(undefined),
+  deleteFileFromES: jest.fn().mockResolvedValue(undefined),
+  ...overrides,
+});
 
 describe('ArchivoService', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    esClient.index.mockResolvedValue({});
-    esClient.update.mockResolvedValue({});
-    esClient.delete.mockResolvedValue({});
+  let repo;
+  let producer;
+  let service;
+
+  beforeAll(() => {
+    fs.mkdirSync(env.UPLOAD_DIR, { recursive: true });
   });
 
-  describe('configuración de subida (Multer)', () => {
-    it('expone middleware upload de multer', () => {
-      expect(upload).toBeDefined();
-      expect(typeof upload.single).toBe('function');
-    });
+  afterAll(() => {
+    fs.rmSync(env.UPLOAD_DIR, { recursive: true, force: true });
+  });
 
-    it('define extensiones permitidas: solo PDF e imágenes', () => {
-      expect(ALLOWED_EXTENSIONS.has('.pdf')).toBe(true);
-      expect(ALLOWED_EXTENSIONS.has('.jpg')).toBe(true);
-      expect(ALLOWED_EXTENSIONS.has('.jpeg')).toBe(true);
-      expect(ALLOWED_EXTENSIONS.has('.png')).toBe(true);
-      expect(ALLOWED_EXTENSIONS.has('.gif')).toBe(true);
-      expect(ALLOWED_EXTENSIONS.has('.exe')).toBe(false);
-      expect(ALLOWED_EXTENSIONS.has('.doc')).toBe(false);
-      expect(ALLOWED_EXTENSIONS.has('.zip')).toBe(false);
-    });
-
-    it('fileFilter acepta PDF', (done) => {
-      fileFilter({}, { originalname: 'informe.PDF' }, (err, accept) => {
-        expect(err).toBeNull();
-        expect(accept).toBe(true);
-        done();
-      });
-    });
-
-    it('fileFilter acepta imágenes (jpg, png, gif)', (done) => {
-      fileFilter({}, { originalname: 'foto.jpg' }, (err, accept) => {
-        expect(err).toBeNull();
-        expect(accept).toBe(true);
-        done();
-      });
-    });
-
-    it('fileFilter rechaza extensiones no permitidas con ValidationError', (done) => {
-      fileFilter({}, { originalname: 'virus.exe' }, (err) => {
-        expect(err).toBeDefined();
-        expect(err.statusCode).toBe(400);
-        expect(err.message).toMatch(/Invalid file type/);
-        done();
-      });
-    });
-
-    it('fileFilter rechaza .zip y .docx', (done) => {
-      fileFilter({}, { originalname: 'data.zip' }, (err) => {
-        expect(err).toBeDefined();
-        expect(err.statusCode).toBe(400);
-        done();
-      });
-    });
+  beforeEach(() => {
+    jest.clearAllMocks();
+    repo = mockRepository();
+    producer = mockProducer();
+    service = new ArchivoService(repo, producer);
   });
 
   describe('uploadFile', () => {
-    it('sube un archivo, renombra con UUID e indexa metadata en ES', async () => {
-      const repo = mockRepository();
-      const service = new ArchivoService(repo);
-      const file = mockFile();
-
-      const result = await service.uploadFile(file, {
-        entidadAsociada: 'evento',
-        uuidAsociado: '660e8400-e29b-41d4-a716-446655440001',
-        usuarioId: 10,
+    it('guarda el binario en UPLOAD_DIR con nombre UUID y persiste los metadatos', async () => {
+      const result = await service.uploadFile(buildFile(), {
+        entidadAsociada: 'request',
+        uuidAsociado: UUID,
         carpeta: 'documentos',
-      });
+        publico: true,
+      }, OWNER);
 
-      expect(result).toEqual(archivoFixture);
-      expect(repo.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          nombreOriginal: 'documento.pdf',
-          tipo: 'application/pdf',
-          tamano: 1024,
-          extension: '.pdf',
-        }),
-      );
-      // Nombre almacenado con UUID + extensión
-      const storedName = repo.create.mock.calls[0][0].nombreAlmacenado;
-      expect(storedName).toMatch(/^[0-9a-f-]{36}\.pdf$/);
-      // Ruta bajo UPLOAD_DIR (compatible Windows/POSIX)
-      expect(repo.create.mock.calls[0][0].ruta).toMatch(/tmp.+uploads-test/);
-      // Indexación ES
-      expect(esClient.index).toHaveBeenCalledWith(
-        expect.objectContaining({
-          index: 'test_uajs_storage',
-          id: archivoFixture.uuid,
-        }),
-      );
+      const data = repo.create.mock.calls[0][0];
+      expect(data).toEqual(expect.objectContaining({
+        nombreOriginal: 'documento.pdf',
+        mimeType: 'application/pdf',
+        pesoBytes: buildFile().size,
+        extension: '.pdf',
+        entidadAsociada: 'request',
+        uuidAsociado: UUID,
+        subidoPor: 10,
+        subidoPorNombre: 'Juan Perez',
+        carpeta: 'documentos',
+        publico: true,
+      }));
+      expect(data.nombreSistema).toMatch(/^[0-9a-f-]{36}\.pdf$/);
+      expect(path.dirname(data.rutaAcceso)).toBe(path.normalize(env.UPLOAD_DIR));
+      expect(fs.readFileSync(data.rutaAcceso, 'utf8')).toContain('contenido de prueba');
+      expect(result).toEqual(archivoFixture());
     });
 
     it('usa valores por defecto cuando no hay metadata', async () => {
-      const repo = mockRepository();
-      const service = new ArchivoService(repo);
+      await service.uploadFile(buildFile(), {}, OWNER);
 
-      await service.uploadFile(mockFile(), undefined);
-
-      expect(repo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ carpeta: 'general', publico: false }),
-      );
+      expect(repo.create).toHaveBeenCalledWith(expect.objectContaining({
+        entidadAsociada: null,
+        uuidAsociado: null,
+        carpeta: 'general',
+        publico: false,
+      }));
     });
 
-    it('retorna el archivo aunque falle la indexación en ES', async () => {
-      esClient.index.mockRejectedValue(new Error('ES down'));
-      const repo = mockRepository();
-      const service = new ArchivoService(repo);
+    it('encola la indexación en Elasticsearch tras persistir', async () => {
+      await service.uploadFile(buildFile(), {}, OWNER);
+      expect(producer.indexFile).toHaveBeenCalledWith(archivoFixture());
+    });
 
-      const result = await service.uploadFile(mockFile(), {});
+    it('conserva solo el nombre base del archivo original', async () => {
+      await service.uploadFile(buildFile({ originalname: 'carpeta/anidada/archivo.pdf' }), {}, OWNER);
+      expect(repo.create.mock.calls[0][0].nombreOriginal).toBe('archivo.pdf');
+    });
 
-      expect(result).toEqual(archivoFixture);
+    it('rechaza extensiones no permitidas sin tocar la base de datos', async () => {
+      const file = buildFile({ originalname: 'virus.exe' });
+      await expect(service.uploadFile(file, {}, OWNER)).rejects.toThrow(ValidationError);
+      expect(repo.create).not.toHaveBeenCalled();
+    });
+
+    it('rechaza archivos vacíos', async () => {
+      const file = buildFile({ size: 0 });
+      await expect(service.uploadFile(file, {}, OWNER)).rejects.toThrow('El archivo está vacío');
+    });
+
+    it('rechaza archivos que superan MAX_FILE_SIZE', async () => {
+      const file = buildFile({ size: env.MAX_FILE_SIZE + 1 });
+      await expect(service.uploadFile(file, {}, OWNER)).rejects.toThrow(/tamaño máximo/);
+      expect(repo.create).not.toHaveBeenCalled();
+    });
+
+    it('elimina el binario y propaga el error si falla la persistencia', async () => {
+      repo.create.mockRejectedValue(new Error('db caída'));
+
+      await expect(service.uploadFile(buildFile(), {}, OWNER)).rejects.toThrow('db caída');
+
+      const ruta = repo.create.mock.calls[0][0].rutaAcceso;
+      expect(fs.existsSync(ruta)).toBe(false);
+      expect(producer.indexFile).not.toHaveBeenCalled();
+    });
+
+    it('devuelve el archivo aunque no se pueda encolar la indexación', async () => {
+      producer.indexFile.mockRejectedValue(new Error('redis caído'));
+
+      const result = await service.uploadFile(buildFile(), {}, OWNER);
+
+      expect(result).toEqual(archivoFixture());
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('encolar'),
+        expect.objectContaining({ operacion: 'indexFile' }),
+      );
     });
   });
 
-  describe('getFileById / getFileByUuid', () => {
-    it('retorna archivo por ID', async () => {
-      const service = new ArchivoService(mockRepository());
-      const result = await service.getFileById(1);
-      expect(result.id).toBe(1);
-    });
-
-    it('lanza NotFoundError si el ID no existe', async () => {
-      const service = new ArchivoService(mockRepository({ findById: jest.fn().mockResolvedValue(null) }));
-      await expect(service.getFileById(999)).rejects.toThrow(NotFoundError);
-    });
-
-    it('retorna archivo por UUID', async () => {
-      const service = new ArchivoService(mockRepository());
-      const result = await service.getFileByUuid(archivoFixture.uuid);
-      expect(result.uuid).toBe(archivoFixture.uuid);
-    });
-
+  describe('getFileByUuid (lectura)', () => {
     it('lanza NotFoundError si el UUID no existe', async () => {
-      const service = new ArchivoService(
-        mockRepository({ findByUuid: jest.fn().mockResolvedValue(null) }),
+      service = new ArchivoService(mockRepository({ findByUuid: jest.fn().mockResolvedValue(null) }), producer);
+      await expect(service.getFileByUuid(UUID, OWNER)).rejects.toThrow(NotFoundError);
+    });
+
+    it('permite al dueño leer su archivo privado', async () => {
+      await expect(service.getFileByUuid(UUID, OWNER)).resolves.toEqual(archivoFixture());
+    });
+
+    it('impide a otro usuario leer un archivo privado', async () => {
+      await expect(service.getFileByUuid(UUID, OTHER_TEACHER)).rejects.toThrow(ForbiddenError);
+    });
+
+    it('permite a ADMIN/STAFF leer cualquier archivo', async () => {
+      await expect(service.getFileByUuid(UUID, STAFF)).resolves.toBeDefined();
+    });
+
+    it('permite leer un archivo público y activo a cualquier usuario', async () => {
+      service = new ArchivoService(
+        mockRepository({ findByUuid: jest.fn().mockResolvedValue(archivoFixture({ publico: true })) }),
+        producer,
       );
-      await expect(service.getFileByUuid('no-existe')).rejects.toThrow(NotFoundError);
+      await expect(service.getFileByUuid(UUID, OTHER_TEACHER)).resolves.toBeDefined();
+    });
+
+    it('no expone un archivo público pero inactivo a usuarios sin permisos', async () => {
+      service = new ArchivoService(
+        mockRepository({
+          findByUuid: jest.fn().mockResolvedValue(archivoFixture({ publico: true, activo: false })),
+        }),
+        producer,
+      );
+      await expect(service.getFileByUuid(UUID, OTHER_TEACHER)).rejects.toThrow(ForbiddenError);
+    });
+
+    it('exige autenticación para archivos privados sin usuario', async () => {
+      await expect(service.getFileByUuid(UUID, null)).rejects.toThrow(UnauthorizedError);
     });
   });
 
   describe('listFiles', () => {
-    it('delega paginación al repositorio', async () => {
-      const repo = mockRepository();
-      const service = new ArchivoService(repo);
-      const result = await service.listFiles({ page: 2, limit: 10 });
+    it('limita el alcance a los archivos del usuario y públicos', async () => {
+      await service.listFiles({ page: 2, limit: 10, tipo: 'application/pdf' }, OWNER);
 
-      expect(repo.findAll).toHaveBeenCalledWith({ page: 2, limit: 10 });
-      expect(result.total).toBe(1);
-    });
-  });
-
-  describe('updateFile', () => {
-    it('actualiza y sincroniza en ES', async () => {
-      const repo = mockRepository();
-      const service = new ArchivoService(repo);
-
-      const result = await service.updateFile(1, { carpeta: 'nueva' });
-
-      expect(repo.update).toHaveBeenCalledWith(1, { carpeta: 'nueva' });
-      expect(esClient.update).toHaveBeenCalledWith(
-        expect.objectContaining({ index: 'test_uajs_storage', id: archivoFixture.uuid }),
-      );
-      expect(result).toEqual(archivoFixture);
+      expect(repo.findAll).toHaveBeenCalledWith({
+        page: 2,
+        limit: 10,
+        tipo: 'application/pdf',
+        scope: { usuarioId: 10, puedeVerTodo: false },
+      });
     });
 
-    it('retorna aunque falle ES en update', async () => {
-      esClient.update.mockRejectedValue(new Error('ES down'));
-      const service = new ArchivoService(mockRepository());
-      const result = await service.updateFile(1, { carpeta: 'x' });
-      expect(result).toEqual(archivoFixture);
-    });
-  });
-
-  describe('deleteFile', () => {
-    it('elimina y borra documento de ES', async () => {
-      const repo = mockRepository();
-      const service = new ArchivoService(repo);
-
-      const result = await service.deleteFile(1);
-
-      expect(repo.delete).toHaveBeenCalledWith(1);
-      expect(esClient.delete).toHaveBeenCalledWith(
-        expect.objectContaining({ index: 'test_uajs_storage', id: archivoFixture.uuid }),
-      );
-      expect(result).toEqual({ success: true });
-    });
-
-    it('lanza NotFoundError si no existe', async () => {
-      const service = new ArchivoService(mockRepository({ findById: jest.fn().mockResolvedValue(null) }));
-      await expect(service.deleteFile(999)).rejects.toThrow(NotFoundError);
-    });
-
-    it('retorna success aunque falle ES en delete', async () => {
-      esClient.delete.mockRejectedValue(new Error('ES down'));
-      const service = new ArchivoService(mockRepository());
-      const result = await service.deleteFile(1);
-      expect(result).toEqual({ success: true });
+    it('no limita el alcance para ADMIN/STAFF', async () => {
+      await service.listFiles({ page: 1, limit: 20 }, STAFF);
+      expect(repo.findAll).toHaveBeenCalledWith(expect.objectContaining({
+        scope: { usuarioId: 99, puedeVerTodo: true },
+      }));
     });
   });
 
   describe('searchFiles', () => {
-    it('delega búsqueda al repositorio (ES)', async () => {
-      const repo = mockRepository();
-      const service = new ArchivoService(repo);
-      const result = await service.searchFiles({ search: 'contrato', limit: 10 });
+    it('delega la búsqueda en Elasticsearch con el alcance del usuario', async () => {
+      const result = await service.searchFiles({ search: 'contrato', page: 1, limit: 10 }, OWNER);
 
-      expect(repo.searchInElasticsearch).toHaveBeenCalledWith({ search: 'contrato', limit: 10 });
+      expect(repo.searchInElasticsearch).toHaveBeenCalledWith({
+        search: 'contrato',
+        page: 1,
+        limit: 10,
+        scope: { usuarioId: 10, puedeVerTodo: false },
+      });
       expect(result.total).toBe(1);
+    });
+
+    it('degrada a MySQL si Elasticsearch falla', async () => {
+      repo.searchInElasticsearch.mockRejectedValue(new Error('ES down'));
+
+      const result = await service.searchFiles({ search: 'contrato', page: 1, limit: 10 }, OWNER);
+
+      expect(repo.findAll).toHaveBeenCalledWith(expect.objectContaining({
+        search: 'contrato',
+        scope: { usuarioId: 10, puedeVerTodo: false },
+      }));
       expect(result.files).toHaveLength(1);
+      expect(logger.warn).toHaveBeenCalled();
+    });
+  });
+
+  describe('updateFile', () => {
+    it('actualiza los metadatos del dueño y encola la sincronización', async () => {
+      const result = await service.updateFile(UUID, { carpeta: 'nueva' }, OWNER);
+
+      expect(repo.update).toHaveBeenCalledWith(1, { carpeta: 'nueva' });
+      expect(producer.updateFileInES).toHaveBeenCalledWith(expect.objectContaining({
+        uuid: UUID,
+        carpeta: 'nueva',
+      }));
+      expect(result.carpeta).toBe('nueva');
+    });
+
+    it('impide modificar archivos de otro usuario', async () => {
+      await expect(service.updateFile(UUID, { carpeta: 'x' }, OTHER_TEACHER))
+        .rejects.toThrow(ForbiddenError);
+      expect(repo.update).not.toHaveBeenCalled();
+    });
+
+    it('lanza NotFoundError si el archivo no existe', async () => {
+      service = new ArchivoService(mockRepository({ findByUuid: jest.fn().mockResolvedValue(null) }), producer);
+      await expect(service.updateFile(UUID, { carpeta: 'x' }, OWNER)).rejects.toThrow(NotFoundError);
+    });
+
+    it('lanza NotFoundError si el registro desaparece durante la actualización', async () => {
+      repo.update.mockResolvedValue(null);
+      await expect(service.updateFile(UUID, { carpeta: 'x' }, OWNER)).rejects.toThrow(NotFoundError);
+    });
+
+    it('no falla si no se puede encolar la sincronización', async () => {
+      producer.updateFileInES.mockRejectedValue(new Error('redis caído'));
+      await expect(service.updateFile(UUID, { carpeta: 'x' }, OWNER)).resolves.toBeDefined();
+    });
+  });
+
+  describe('deleteFile', () => {
+    it('aplica soft delete y encola la eliminación del índice', async () => {
+      const result = await service.deleteFile(UUID, OWNER);
+
+      expect(repo.delete).toHaveBeenCalledWith(1);
+      expect(producer.deleteFileFromES).toHaveBeenCalledWith(UUID);
+      expect(result).toEqual({ uuid: UUID });
+    });
+
+    it('impide eliminar archivos de otro usuario', async () => {
+      await expect(service.deleteFile(UUID, OTHER_TEACHER)).rejects.toThrow(ForbiddenError);
+      expect(repo.delete).not.toHaveBeenCalled();
+    });
+
+    it('lanza NotFoundError si el repositorio no encuentra el registro', async () => {
+      repo.delete.mockResolvedValue(false);
+      await expect(service.deleteFile(UUID, OWNER)).rejects.toThrow(NotFoundError);
+    });
+
+    it('permite a STAFF eliminar cualquier archivo', async () => {
+      await expect(service.deleteFile(UUID, STAFF)).resolves.toEqual({ uuid: UUID });
+    });
+  });
+
+  describe('getDownload', () => {
+    const rutaDescarga = () => {
+      const ruta = path.join(env.UPLOAD_DIR, 'descarga.pdf');
+      fs.writeFileSync(ruta, 'pdf');
+      return ruta;
+    };
+
+    it('devuelve la ruta física para un archivo público', async () => {
+      const ruta = rutaDescarga();
+      service = new ArchivoService(
+        mockRepository({
+          findByUuid: jest.fn().mockResolvedValue(archivoFixture({ publico: true, ruta_acceso: ruta })),
+        }),
+        producer,
+      );
+
+      const result = await service.getDownload(UUID, null);
+
+      expect(result).toEqual({
+        ruta: path.resolve(ruta),
+        nombre: 'documento.pdf',
+        mimeType: 'application/pdf',
+      });
+    });
+
+    it('exige autenticación para descargar un archivo privado sin token', async () => {
+      await expect(service.getDownload(UUID, null)).rejects.toThrow(UnauthorizedError);
+    });
+
+    it('permite descargar al dueño', async () => {
+      service = new ArchivoService(
+        mockRepository({
+          findByUuid: jest.fn().mockResolvedValue(archivoFixture({ ruta_acceso: rutaDescarga() })),
+        }),
+        producer,
+      );
+      await expect(service.getDownload(UUID, OWNER)).resolves.toBeDefined();
+    });
+
+    it('lanza NotFoundError si el binario no existe en disco', async () => {
+      service = new ArchivoService(
+        mockRepository({
+          findByUuid: jest.fn().mockResolvedValue(archivoFixture({
+            ruta_acceso: path.join(env.UPLOAD_DIR, 'no-existe.pdf'),
+          })),
+        }),
+        producer,
+      );
+      await expect(service.getDownload(UUID, OWNER)).rejects.toThrow(
+        'El archivo físico no está disponible',
+      );
     });
   });
 });

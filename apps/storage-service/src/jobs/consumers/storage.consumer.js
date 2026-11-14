@@ -69,7 +69,7 @@ class StorageConsumer {
   }
 
   async handleUpdateFile(data) {
-    const { uuid, ...updateData } = data;
+    const { uuid, timestamp, ...updateData } = data;
 
     await esClient.update({
       index: env.STORAGE_INDEX,

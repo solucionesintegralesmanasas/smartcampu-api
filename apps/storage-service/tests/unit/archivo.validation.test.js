@@ -1,82 +1,157 @@
 const {
   AppError,
-  ValidationError,
-  NotFoundError,
   ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  UnauthorizedError,
+  ValidationError,
 } = require('../../src/core/exceptions');
 const { getPaginationMeta } = require('../../src/core/helpers/pagination.helper');
 const {
-  createFileMetadataSchema,
-  updateFileSchema,
-  listFilesQuerySchema,
-  searchFilesQuerySchema,
+  ALLOWED_EXTENSIONS,
+  createArchivoSchema,
+  updateArchivoSchema,
+  listArchivosQuerySchema,
+  buscarArchivosQuerySchema,
+  uuidParamSchema,
 } = require('../../src/modules/archivo/archivo.validation');
 
+const UUID = '550e8400-e29b-41d4-a716-446655440000';
+
 describe('archivo.validation', () => {
-  describe('createFileMetadataSchema', () => {
-    it('aplica valores por defecto', () => {
-      const result = createFileMetadataSchema.safeParse({});
+  describe('ALLOWED_EXTENSIONS', () => {
+    it('solo permite PDF e imágenes', () => {
+      expect(ALLOWED_EXTENSIONS).toEqual(['.pdf', '.jpg', '.jpeg', '.png', '.gif']);
+    });
+  });
+
+  describe('createArchivoSchema', () => {
+    it('aplica valores por defecto (carpeta general, privado)', () => {
+      const result = createArchivoSchema.safeParse({});
       expect(result.success).toBe(true);
-      expect(result.data.carpeta).toBe('general');
+      expect(result.data).toEqual({ carpeta: 'general', publico: false });
+    });
+
+    it('interpreta "false" de multipart como falso (no como truthy)', () => {
+      const result = createArchivoSchema.safeParse({ publico: 'false' });
       expect(result.data.publico).toBe(false);
     });
 
+    it('interpreta "true" y booleanos reales', () => {
+      expect(createArchivoSchema.safeParse({ publico: 'true' }).data.publico).toBe(true);
+      expect(createArchivoSchema.safeParse({ publico: true }).data.publico).toBe(true);
+    });
+
+    it('rechaza valores de publico que no son booleanos', () => {
+      expect(createArchivoSchema.safeParse({ publico: 'si' }).success).toBe(false);
+    });
+
     it('acepta metadata completa válida', () => {
-      const result = createFileMetadataSchema.safeParse({
-        entidadAsociada: 'evento',
-        uuidAsociado: '550e8400-e29b-41d4-a716-446655440000',
-        carpeta: 'docs',
-        publico: true,
+      const result = createArchivoSchema.safeParse({
+        entidadAsociada: 'request',
+        uuidAsociado: UUID,
+        carpeta: 'documentos',
+        publico: 'true',
       });
       expect(result.success).toBe(true);
     });
 
-    it('rechaza UUID asociado inválido', () => {
-      const result = createFileMetadataSchema.safeParse({ uuidAsociado: 'no-uuid' });
+    it('rechaza uuidAsociado sin entidadAsociada', () => {
+      const result = createArchivoSchema.safeParse({ uuidAsociado: UUID });
       expect(result.success).toBe(false);
+      expect(result.error.errors[0].path).toEqual(['entidadAsociada']);
+    });
+
+    it('rechaza UUID asociado inválido', () => {
+      const result = createArchivoSchema.safeParse({
+        entidadAsociada: 'request',
+        uuidAsociado: 'no-uuid',
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('rechaza carpeta demasiado larga (máx. 100)', () => {
+      expect(createArchivoSchema.safeParse({ carpeta: 'a'.repeat(101) }).success).toBe(false);
     });
   });
 
-  describe('updateFileSchema', () => {
+  describe('updateArchivoSchema', () => {
     it('acepta actualización parcial', () => {
-      expect(updateFileSchema.safeParse({ carpeta: 'nueva' }).success).toBe(true);
+      expect(updateArchivoSchema.safeParse({ carpeta: 'nueva' }).success).toBe(true);
+    });
+
+    it('rechaza un cuerpo sin campos', () => {
+      expect(updateArchivoSchema.safeParse({}).success).toBe(false);
     });
 
     it('rechaza nombre vacío', () => {
-      expect(updateFileSchema.safeParse({ nombreOriginal: '' }).success).toBe(false);
+      expect(updateArchivoSchema.safeParse({ nombreOriginal: '' }).success).toBe(false);
+    });
+
+    it('permite desvincular entidad con null', () => {
+      const result = updateArchivoSchema.safeParse({ entidadAsociada: null, uuidAsociado: null });
+      expect(result.success).toBe(true);
+    });
+
+    it('parsea flags de texto en activo y publico', () => {
+      const result = updateArchivoSchema.safeParse({ activo: 'false', publico: 'true' });
+      expect(result.data).toEqual({ activo: false, publico: true });
     });
   });
 
-  describe('listFilesQuerySchema', () => {
+  describe('listArchivosQuerySchema', () => {
     it('aplica paginación por defecto', () => {
-      const result = listFilesQuerySchema.safeParse({});
+      const result = listArchivosQuerySchema.safeParse({});
       expect(result.success).toBe(true);
       expect(result.data.page).toBe(1);
       expect(result.data.limit).toBe(20);
     });
 
+    it('convierte page y limit numéricos desde query string', () => {
+      const result = listArchivosQuerySchema.safeParse({ page: '3', limit: '10' });
+      expect(result.data).toEqual(expect.objectContaining({ page: 3, limit: 10 }));
+    });
+
     it('rechaza límite mayor a 100', () => {
-      expect(listFilesQuerySchema.safeParse({ limit: 500 }).success).toBe(false);
+      expect(listArchivosQuerySchema.safeParse({ limit: 500 }).success).toBe(false);
+    });
+
+    it('rechaza página no positiva', () => {
+      expect(listArchivosQuerySchema.safeParse({ page: 0 }).success).toBe(false);
     });
   });
 
-  describe('searchFilesQuerySchema', () => {
-    it('acepta búsqueda con q', () => {
-      const result = searchFilesQuerySchema.safeParse({ q: 'contrato' });
-      expect(result.success).toBe(true);
-      expect(result.data.offset).toBe(0);
+  describe('buscarArchivosQuerySchema', () => {
+    it('exige el término de búsqueda', () => {
+      const result = buscarArchivosQuerySchema.safeParse({});
+      expect(result.success).toBe(false);
     });
 
-    it('acepta búsqueda con search', () => {
-      expect(searchFilesQuerySchema.safeParse({ search: 'informe' }).success).toBe(true);
+    it('rechaza término vacío', () => {
+      expect(buscarArchivosQuerySchema.safeParse({ search: '   ' }).success).toBe(false);
+    });
+
+    it('acepta término con filtros opcionales', () => {
+      const result = buscarArchivosQuerySchema.safeParse({ search: 'contrato', tipo: 'application/pdf' });
+      expect(result.success).toBe(true);
+      expect(result.data.page).toBe(1);
+    });
+  });
+
+  describe('uuidParamSchema', () => {
+    it('acepta un UUID válido', () => {
+      expect(uuidParamSchema.safeParse({ uuid: UUID }).success).toBe(true);
+    });
+
+    it('rechaza un identificador que no es UUID', () => {
+      expect(uuidParamSchema.safeParse({ uuid: '12' }).success).toBe(false);
     });
   });
 });
 
 describe('pagination.helper', () => {
   it('calcula metadatos de paginación', () => {
-    const meta = getPaginationMeta(2, 10, 25);
-    expect(meta).toEqual({
+    expect(getPaginationMeta(2, 10, 25)).toEqual({
       page: 2,
       limit: 10,
       total: 25,
@@ -111,5 +186,10 @@ describe('excepciones', () => {
 
   it('ConflictError usa 409', () => {
     expect(new ConflictError().statusCode).toBe(409);
+  });
+
+  it('UnauthorizedError usa 401 y ForbiddenError usa 403', () => {
+    expect(new UnauthorizedError().statusCode).toBe(401);
+    expect(new ForbiddenError().statusCode).toBe(403);
   });
 });

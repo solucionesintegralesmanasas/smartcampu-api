@@ -34,7 +34,7 @@ describe('app + routes + loaders', () => {
     jest.clearAllMocks();
   });
 
-  it('initApp expone /healthz y monta /api/v1/storage', async () => {
+  it('initApp expone /healthz con el estado del servicio', async () => {
     const initApp = require('../../src/app');
     const app = initApp();
 
@@ -43,40 +43,25 @@ describe('app + routes + loaders', () => {
     expect(health.body).toEqual(
       expect.objectContaining({ status: 'UP', service: 'storage-service' }),
     );
-
-    // Listar archivos: el repositorio intentará conectar a MySQL real;
-    // solo verificamos que la ruta existe y responde (200 o 500).
-    const list = await request(app).get('/api/v1/storage?page=1&limit=5');
-    expect([200, 500]).toContain(list.status);
   });
 
-  it('POST /api/v1/storage/upload sin archivo retorna 400', async () => {
+  it('las rutas de archivos exigen autenticación (401 sin token)', async () => {
     const initApp = require('../../src/app');
     const app = initApp();
 
-    const res = await request(app).post('/api/v1/storage/upload').field('carpeta', 'docs');
-    expect(res.status).toBe(400);
-    expect(res.body.success).toBe(false);
+    const list = await request(app).get('/api/v1/storage/archivos?page=1&limit=5');
+    expect(list.status).toBe(401);
+
+    const upload = await request(app).post('/api/v1/storage/archivos').field('carpeta', 'docs');
+    expect(upload.status).toBe(401);
   });
 
-  it('POST /api/v1/storage/upload rechaza extensión .exe con 400', async () => {
+  it('una ruta inexistente responde 404', async () => {
     const initApp = require('../../src/app');
     const app = initApp();
 
-    const res = await request(app)
-      .post('/api/v1/storage/upload')
-      .attach('file', Buffer.from('MZ-fake'), 'virus.exe');
-
-    expect(res.status).toBe(400);
-    expect(res.body.success).toBe(false);
-  });
-
-  it('GET /api/v1/storage/search sin término retorna 400', async () => {
-    const initApp = require('../../src/app');
-    const app = initApp();
-
-    const res = await request(app).get('/api/v1/storage/search');
-    expect(res.status).toBe(400);
+    const res = await request(app).get('/api/v1/storage/no-existe');
+    expect(res.status).toBe(404);
   });
 
   it('manejador de errores responde JSON con success:false', async () => {
@@ -90,8 +75,6 @@ describe('app + routes + loaders', () => {
     });
 
     const res = await request(app).get('/falla');
-    // El manejador de errores está registrado antes de /falla en este montaje,
-    // Express lo ignora para esta ruta; aceptamos 500 genérico o el error.
     expect([500]).toContain(res.status);
   });
 

@@ -1,3 +1,6 @@
+const os = require('os');
+const path = require('path');
+
 const testEnv = {
   NODE_ENV: 'test',
   PORT: '3011',
@@ -16,7 +19,7 @@ const testEnv = {
   STORAGE_QUEUE: 'test_storage_jobs',
   STORAGE_INDEX: 'test_uajs_storage',
   MAX_FILE_SIZE: '10485760',
-  UPLOAD_DIR: '/tmp/uploads-test',
+  UPLOAD_DIR: path.join(os.tmpdir(), 'uajs-storage-tests'),
   CORS_ALLOWED_ORIGINS: 'http://localhost:3000',
 };
 

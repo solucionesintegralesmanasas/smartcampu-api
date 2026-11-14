@@ -4,7 +4,27 @@ const { createMysqlPool } = require('@uajs/database-client');
 
 const { esClient } = require('../../config/elasticsearch');
 const { env } = require('../../config/env');
-const { NotFoundError } = require('../../core/exceptions');
+
+const COLUMNS = `id, uuid, nombre_original, nombre_sistema, ruta_acceso, mime_type, peso_bytes,
+  extension, entidad_asociada, uuid_asociado, subido_por, subido_por_nombre, carpeta,
+  publico, activo, createdAt, updatedAt`;
+
+const CAMPOS_ACTUALIZABLES = Object.freeze({
+  nombreOriginal: 'nombre_original',
+  entidadAsociada: 'entidad_asociada',
+  uuidAsociado: 'uuid_asociado',
+  carpeta: 'carpeta',
+  publico: 'publico',
+  activo: 'activo',
+});
+
+const toArchivo = (row) => (row
+  ? { ...row, publico: Boolean(row.publico), activo: Boolean(row.activo) }
+  : null);
+
+const escapeLike = (value) => value.replace(/[\\%_]/g, '\\$&');
+
+const escapeWildcard = (value) => value.replace(/[*?\\]/g, '\\$&');
 
 class ArchivoRepository {
   constructor() {
@@ -25,194 +45,218 @@ class ArchivoRepository {
     return this.pool;
   }
 
-  async findById(id) {
-    const pool = await this.getPool();
-    const rows = await pool.query(
-      `SELECT id, uuid, nombre_original, nombre_sistema, ruta_acceso, mime_type, peso_bytes,
-              entidad_asociada, uuid_asociado, subido_por, subido_por_nombre, extension,
-              carpeta, publico, activo, createdAt, updatedAt
-       FROM archivos
-       WHERE id = ? AND deleted_at IS NULL`,
-      [id],
-    );
-    return rows[0] || null;
+  /**
+   * Construye el WHERE de listados. Los usuarios sin permisos de gestión solo
+   * ven sus propios archivos y los públicos activos.
+   */
+  buildWhere(scope, filtros) {
+    const clauses = ['deleted_at IS NULL'];
+    const params = [];
+
+    if (!scope.puedeVerTodo) {
+      clauses.push('(subido_por = ? OR (publico = 1 AND activo = 1))');
+      params.push(scope.usuarioId);
+    }
+    if (filtros.search) {
+      clauses.push('nombre_original LIKE ?');
+      params.push(`%${escapeLike(filtros.search)}%`);
+    }
+    if (filtros.usuarioId) {
+      clauses.push('subido_por = ?');
+      params.push(filtros.usuarioId);
+    }
+    if (filtros.tipo) {
+      clauses.push('mime_type = ?');
+      params.push(filtros.tipo);
+    }
+    if (filtros.entidad) {
+      clauses.push('entidad_asociada = ?');
+      params.push(filtros.entidad);
+    }
+    if (filtros.uuidAsociado) {
+      clauses.push('uuid_asociado = ?');
+      params.push(filtros.uuidAsociado);
+    }
+    if (filtros.carpeta) {
+      clauses.push('carpeta = ?');
+      params.push(filtros.carpeta);
+    }
+    if (filtros.activo !== undefined) {
+      clauses.push('activo = ?');
+      params.push(filtros.activo ? 1 : 0);
+    }
+
+    return { where: `WHERE ${clauses.join(' AND ')}`, params };
   }
 
   async findByUuid(uuid) {
     const pool = await this.getPool();
     const rows = await pool.query(
-      `SELECT id, uuid, nombre_original, nombre_sistema, ruta_acceso, mime_type, peso_bytes,
-              entidad_asociada, uuid_asociado, subido_por, subido_por_nombre, extension,
-              carpeta, publico, activo, createdAt, updatedAt
-       FROM archivos
-       WHERE uuid = ? AND deleted_at IS NULL`,
+      `SELECT ${COLUMNS} FROM archivos WHERE uuid = ? AND deleted_at IS NULL`,
       [uuid],
     );
-    return rows[0] || null;
+    return toArchivo(rows[0]);
   }
 
   async findAll({
-    page = 1, limit = 20, usuarioId, tipo, entidad, activo,
+    page = 1,
+    limit = 20,
+    scope = { usuarioId: null, puedeVerTodo: false },
+    ...filtros
   }) {
     const pool = await this.getPool();
-    const offset = (page - 1) * limit;
+    const { where, params } = this.buildWhere(scope, filtros);
 
-    let whereClause = 'WHERE deleted_at IS NULL';
-    const params = [];
-
-    if (usuarioId) {
-      whereClause += ' AND subido_por = ?';
-      params.push(usuarioId);
-    }
-    if (tipo) {
-      whereClause += ' AND mime_type = ?';
-      params.push(tipo);
-    }
-    if (entidad) {
-      whereClause += ' AND entidad_asociada = ?';
-      params.push(entidad);
-    }
-    if (activo !== undefined) {
-      whereClause += ' AND activo = ?';
-      params.push(activo ? 1 : 0);
-    }
-
-    const countRows = await pool.query(
-      `SELECT COUNT(*) as total FROM archivos ${whereClause}`,
+    const [{ total }] = await pool.query(
+      `SELECT COUNT(*) AS total FROM archivos ${where}`,
       params,
     );
-    const [{ total }] = countRows;
-
     const rows = await pool.query(
-      `SELECT id, uuid, nombre_original, nombre_sistema, ruta_acceso, mime_type, peso_bytes,
-              entidad_asociada, uuid_asociado, subido_por, subido_por_nombre, extension,
-              carpeta, publico, activo, createdAt, updatedAt
-       FROM archivos
-       ${whereClause}
-       ORDER BY createdAt DESC
+      `SELECT ${COLUMNS} FROM archivos ${where}
+       ORDER BY createdAt DESC, id DESC
        LIMIT ? OFFSET ?`,
-      [...params, limit, offset],
+      [...params, limit, (page - 1) * limit],
     );
 
-    return { files: rows, total };
+    return { files: rows.map(toArchivo), total: Number(total) };
   }
 
+  /**
+   * Inserta el archivo y devuelve la fila persistida dentro de la misma transacción.
+   */
   async create(data) {
     const pool = await this.getPool();
-    const conn = await pool.beginTransaction();
+    const tx = await pool.beginTransaction();
     try {
-      const uuid = crypto.randomUUID();
-      const result = await conn.query(
+      const result = await tx.query(
         `INSERT INTO archivos (
           uuid, nombre_original, nombre_sistema, ruta_acceso, mime_type, peso_bytes,
-          entidad_asociada, uuid_asociado, subido_por, subido_por_nombre, extension,
-          carpeta, publico, activo, createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())`,
+          extension, entidad_asociada, uuid_asociado, subido_por, subido_por_nombre,
+          carpeta, publico, activo
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
         [
-          uuid,
+          crypto.randomUUID(),
           data.nombreOriginal,
-          data.nombreAlmacenado,
-          data.ruta,
-          data.tipo,
-          data.tamano,
-          data.entidadAsociada || null,
-          data.uuidAsociado || null,
-          data.usuarioId || null,
-          data.usuarioNombre || null,
+          data.nombreSistema,
+          data.rutaAcceso,
+          data.mimeType,
+          data.pesoBytes,
           data.extension,
+          data.entidadAsociada ?? null,
+          data.uuidAsociado ?? null,
+          data.subidoPor ?? null,
+          data.subidoPorNombre ?? null,
           data.carpeta || 'general',
           data.publico ? 1 : 0,
         ],
       );
-
-      await conn.commit();
-      return this.findById(result.insertId);
+      const [row] = await tx.query(`SELECT ${COLUMNS} FROM archivos WHERE id = ?`, [
+        result.insertId,
+      ]);
+      await tx.commit();
+      return toArchivo(row);
     } catch (error) {
-      await conn.rollback();
+      await tx.rollback();
       throw error;
     } finally {
-      conn.release();
+      tx.release();
     }
   }
 
+  /**
+   * Actualiza solo los campos presentes. Devuelve null si el archivo no existe.
+   */
   async update(id, data) {
     const pool = await this.getPool();
-    const conn = await pool.beginTransaction();
+    const sets = [];
+    const params = [];
+
+    Object.entries(CAMPOS_ACTUALIZABLES).forEach(([campo, columna]) => {
+      if (data[campo] !== undefined) {
+        sets.push(`${columna} = ?`);
+        params.push(typeof data[campo] === 'boolean' ? Number(data[campo]) : data[campo]);
+      }
+    });
+
+    const tx = await pool.beginTransaction();
     try {
-      const existing = await this.findById(id);
-      if (!existing) {
-        throw new NotFoundError('Archivo no encontrado');
+      if (sets.length > 0) {
+        await tx.query(
+          `UPDATE archivos SET ${sets.join(', ')} WHERE id = ? AND deleted_at IS NULL`,
+          [...params, id],
+        );
       }
-
-      const fields = [];
-      const params = [];
-
-      if (data.nombreOriginal !== undefined) {
-        fields.push('nombre_original = ?');
-        params.push(data.nombreOriginal);
-      }
-      if (data.entidadAsociada !== undefined) {
-        fields.push('entidad_asociada = ?');
-        params.push(data.entidadAsociada);
-      }
-      if (data.uuidAsociado !== undefined) {
-        fields.push('uuid_asociado = ?');
-        params.push(data.uuidAsociado);
-      }
-      if (data.carpeta !== undefined) {
-        fields.push('carpeta = ?');
-        params.push(data.carpeta);
-      }
-      if (data.publico !== undefined) {
-        fields.push('publico = ?');
-        params.push(data.publico ? 1 : 0);
-      }
-      if (data.activo !== undefined) {
-        fields.push('activo = ?');
-        params.push(data.activo ? 1 : 0);
-      }
-
-      if (fields.length > 0) {
-        fields.push('updatedAt = NOW()');
-        params.push(id);
-        await conn.query(`UPDATE archivos SET ${fields.join(', ')} WHERE id = ?`, params);
-      }
-
-      await conn.commit();
-      return this.findById(id);
+      const [row] = await tx.query(
+        `SELECT ${COLUMNS} FROM archivos WHERE id = ? AND deleted_at IS NULL`,
+        [id],
+      );
+      await tx.commit();
+      return toArchivo(row);
     } catch (error) {
-      await conn.rollback();
+      await tx.rollback();
       throw error;
     } finally {
-      conn.release();
+      tx.release();
     }
   }
 
+  /**
+   * Soft delete: marca deleted_at y desactiva el registro. El binario se conserva.
+   */
   async delete(id) {
     const pool = await this.getPool();
-    const conn = await pool.beginTransaction();
+    const tx = await pool.beginTransaction();
     try {
-      const existing = await this.findById(id);
-      if (!existing) {
-        throw new NotFoundError('Archivo no encontrado');
-      }
-
-      await conn.query('UPDATE archivos SET deleted_at = NOW(), activo = 0 WHERE id = ?', [id]);
-
-      await conn.commit();
-      return { success: true };
+      const result = await tx.query(
+        'UPDATE archivos SET deleted_at = NOW(), activo = 0 WHERE id = ? AND deleted_at IS NULL',
+        [id],
+      );
+      await tx.commit();
+      return result.affectedRows > 0;
     } catch (error) {
-      await conn.rollback();
+      await tx.rollback();
       throw error;
     } finally {
-      conn.release();
+      tx.release();
     }
   }
 
-  async searchInElasticsearch(query) {
-    const searchTerm = query.search || '';
+  async searchInElasticsearch({
+    search,
+    page = 1,
+    limit = 20,
+    scope = { usuarioId: null, puedeVerTodo: false },
+    usuarioId,
+    tipo,
+    entidad,
+    uuidAsociado,
+    carpeta,
+    activo,
+  }) {
+    const filter = [];
+
+    if (!scope.puedeVerTodo) {
+      filter.push({
+        bool: {
+          should: [
+            { term: { subido_por: scope.usuarioId } },
+            { bool: { must: [{ term: { publico: true } }, { term: { activo: true } }] } },
+          ],
+          minimum_should_match: 1,
+        },
+      });
+    }
+    if (usuarioId) filter.push({ term: { subido_por: usuarioId } });
+    if (tipo) filter.push({ term: { mime_type: tipo } });
+    if (entidad) filter.push({ term: { entidad_asociada: entidad } });
+    if (uuidAsociado) filter.push({ term: { uuid_asociado: uuidAsociado } });
+    if (carpeta) filter.push({ term: { carpeta } });
+    if (activo !== undefined) filter.push({ term: { activo } });
+
     const response = await esClient.search({
       index: env.STORAGE_INDEX,
+      from: (page - 1) * limit,
+      size: limit,
       query: {
         bool: {
           must: [
@@ -221,42 +265,36 @@ class ArchivoRepository {
                 should: [
                   {
                     multi_match: {
-                      query: searchTerm,
-                      fields: ['nombre_original', 'nombre_sistema', 'carpeta'],
+                      query: search,
+                      fields: ['nombre_original^2', 'subido_por_nombre'],
                       type: 'best_fields',
                       fuzziness: 'AUTO',
                     },
                   },
                   {
-                    wildcard: { nombre_original: `*${searchTerm.toLowerCase()}*` },
-                  },
-                  {
-                    wildcard: { nombre_sistema: `*${searchTerm.toLowerCase()}*` },
+                    wildcard: {
+                      'nombre_original.keyword': {
+                        value: `*${escapeWildcard(search)}*`,
+                        case_insensitive: true,
+                      },
+                    },
                   },
                 ],
                 minimum_should_match: 1,
               },
             },
           ],
-          filter: [
-            query.usuarioId ? { term: { subido_por: query.usuarioId } } : null,
-            query.tipo ? { term: { mime_type: query.tipo } } : null,
-            query.entidad ? { term: { entidad_asociada: query.entidad } } : null,
-            query.activo !== undefined ? { term: { activo: query.activo } } : null,
-          ].filter(Boolean),
+          filter,
         },
       },
-      from: query.offset || 0,
-      size: query.limit || 20,
       sort: [{ createdAt: { order: 'desc' } }],
     });
 
-    const hits = response.hits || { total: { value: 0 }, hits: [] };
+    const { hits } = response;
     const total = typeof hits.total === 'number' ? hits.total : hits.total.value;
 
     return {
       total,
-      // _source es convención oficial de la API de Elasticsearch
       // eslint-disable-next-line no-underscore-dangle
       files: hits.hits.map((hit) => hit._source),
     };
