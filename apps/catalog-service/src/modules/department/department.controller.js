@@ -1,3 +1,5 @@
+const { paginationHelper } = require('../../core/helpers/pagination.helper');
+
 class DepartmentController {
   constructor(departmentService) {
     this.departmentService = departmentService;
@@ -14,12 +16,9 @@ class DepartmentController {
 
   async findAll(req, res, next) {
     try {
-      const { page = 1, limit = 10 } = req.query;
-      const result = await this.departmentService.findAll({
-        page: parseInt(page, 10),
-        limit: parseInt(limit, 10),
-      });
-      res.status(200).json({ success: true, data: result.data, pagination: result.pagination });
+      const { page, limit } = paginationHelper(req.query.page, req.query.limit ?? 10);
+      const result = await this.departmentService.findAll({ page, limit });
+      res.status(200).json({ success: true, data: result.data, meta: result.pagination });
     } catch (error) {
       next(error);
     }
@@ -46,7 +45,7 @@ class DepartmentController {
   async delete(req, res, next) {
     try {
       await this.departmentService.delete(req.params.id);
-      res.status(200).json({ success: true, message: 'Department deleted successfully' });
+      res.status(200).json({ success: true, message: 'Departamento eliminado correctamente' });
     } catch (error) {
       next(error);
     }
@@ -54,8 +53,7 @@ class DepartmentController {
 
   async search(req, res, next) {
     try {
-      const { search } = req.query;
-      const result = await this.departmentService.search(search);
+      const result = await this.departmentService.search(req.query.search);
       res.status(200).json({ success: true, data: result });
     } catch (error) {
       next(error);

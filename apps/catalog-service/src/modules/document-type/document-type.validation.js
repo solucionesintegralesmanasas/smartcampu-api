@@ -1,15 +1,22 @@
 const { z } = require('zod');
 
 const createSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters'),
-  code: z.string().max(10).optional(),
+  code: z
+    .string()
+    .trim()
+    .min(1, 'El código es obligatorio')
+    .max(10, 'El código no puede superar 10 caracteres')
+    .transform((value) => value.toUpperCase()),
+  name: z
+    .string()
+    .trim()
+    .min(2, 'El nombre debe tener al menos 2 caracteres')
+    .max(50, 'El nombre no puede superar 50 caracteres'),
   requiresCheckDigit: z.boolean().optional(),
+  appliesToNaturalPerson: z.boolean().optional(),
+  appliesToLegalEntity: z.boolean().optional(),
 });
 
-const updateSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters').optional(),
-  code: z.string().max(10).optional(),
-  requiresCheckDigit: z.boolean().optional(),
-});
+const updateSchema = createSchema.partial();
 
 module.exports = { createSchema, updateSchema };

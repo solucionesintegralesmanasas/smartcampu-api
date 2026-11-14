@@ -3,6 +3,15 @@ const { createMysqlPool } = require('@uajs/database-client');
 const { env } = require('../../config/env');
 const { getPaginationMeta } = require('../../core/helpers/pagination.helper');
 
+const SELECT_FIELDS = `id, uuid, name, dane_code AS daneCode, state_id AS stateId,
+  is_active AS active, created_at, updated_at`;
+
+const UPDATABLE_COLUMNS = {
+  stateId: 'state_id',
+  name: 'name',
+  daneCode: 'dane_code',
+};
+
 class CityRepository {
   constructor() {
     this.pool = null;
@@ -25,8 +34,8 @@ class CityRepository {
   async create({ stateId, name, daneCode }) {
     const pool = await this.getPool();
     const result = await pool.query(
-      'INSERT INTO cities (name, dane_code, state_id, is_active) VALUES (?, ?, ?, ?)',
-      [name, daneCode ?? null, stateId, 1],
+      'INSERT INTO cities (state_id, name, dane_code, is_active) VALUES (?, ?, ?, ?)',
+      [stateId, name, daneCode ?? null, 1],
     );
     return this.findById(result.insertId);
   }
@@ -42,7 +51,7 @@ class CityRepository {
     const { total } = countResult[0];
 
     const rows = await pool.query(
-      'SELECT id, uuid, name, dane_code AS daneCode, state_id AS stateId, is_active AS active, created_at, updated_at FROM cities WHERE is_active = ? ORDER BY id DESC LIMIT ? OFFSET ?',
+      `SELECT ${SELECT_FIELDS} FROM cities WHERE is_active = ? ORDER BY id DESC LIMIT ? OFFSET ?`,
       [1, limit, offset],
     );
 
@@ -55,7 +64,7 @@ class CityRepository {
   async findById(id) {
     const pool = await this.getPool();
     const rows = await pool.query(
-      'SELECT id, uuid, name, dane_code AS daneCode, state_id AS stateId, is_active AS active, created_at, updated_at FROM cities WHERE id = ? AND is_active = ?',
+      `SELECT ${SELECT_FIELDS} FROM cities WHERE id = ? AND is_active = ?`,
       [id, 1],
     );
     return rows[0] || null;
@@ -64,29 +73,38 @@ class CityRepository {
   async findByStateId(stateId) {
     const pool = await this.getPool();
     const rows = await pool.query(
-      'SELECT id, uuid, name, dane_code AS daneCode, state_id AS stateId, is_active AS active, created_at, updated_at FROM cities WHERE state_id = ? AND is_active = ? ORDER BY name',
+      `SELECT ${SELECT_FIELDS} FROM cities WHERE state_id = ? AND is_active = ? ORDER BY name`,
       [stateId, 1],
     );
     return rows;
   }
 
-  async findByName(name) {
+  async findByNameAndState(name, stateId) {
     const pool = await this.getPool();
     const rows = await pool.query(
-      'SELECT id, uuid, name, dane_code AS daneCode, state_id AS stateId, is_active AS active, created_at, updated_at FROM cities WHERE name = ? AND is_active = ?',
-      [name, 1],
+      `SELECT ${SELECT_FIELDS} FROM cities WHERE name = ? AND state_id = ? AND is_active = ?`,
+      [name, stateId, 1],
     );
     return rows[0] || null;
   }
 
-  async update(id, { stateId, name, daneCode }) {
+  async update(id, dto) {
     const pool = await this.getPool();
-    await pool.query('UPDATE cities SET name = ?, dane_code = ?, state_id = ? WHERE id = ?', [
-      name,
-      daneCode ?? null,
-      stateId,
-      id,
-    ]);
+    const sets = [];
+    const params = [];
+
+    Object.entries(UPDATABLE_COLUMNS).forEach(([key, column]) => {
+      if (dto[key] !== undefined) {
+        sets.push(`${column} = ?`);
+        params.push(dto[key] ?? null);
+      }
+    });
+
+    if (sets.length > 0) {
+      params.push(id);
+      await pool.query(`UPDATE cities SET ${sets.join(', ')} WHERE id = ?`, params);
+    }
+
     return this.findById(id);
   }
 
@@ -103,16 +121,12 @@ class CityRepository {
     const pool = await this.getPool();
     const pattern = `%${term}%`;
     const rows = await pool.query(
-      'SELECT id, uuid, name, dane_code AS daneCode, state_id AS stateId, is_active AS active, created_at, updated_at FROM cities WHERE is_active = ? AND (name LIKE ? OR dane_code LIKE ?) ORDER BY name ASC LIMIT 50',
+      `SELECT ${SELECT_FIELDS} FROM cities
+       WHERE is_active = ? AND (name LIKE ? OR dane_code LIKE ?)
+       ORDER BY name ASC LIMIT 50`,
       [1, pattern, pattern],
     );
     return rows;
-  }
-
-  async countAll() {
-    const pool = await this.getPool();
-    const rows = await pool.query('SELECT COUNT(*) AS total FROM cities WHERE is_active = ?', [1]);
-    return rows[0].total;
   }
 }
 

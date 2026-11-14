@@ -3,6 +3,7 @@ const { env } = require('../../config/env');
 const { NotFoundError, ConflictError } = require('../../core/exceptions');
 
 const ES_INDEX = 'cities';
+const CACHE_PREFIX = 'cities';
 
 class CityService {
   constructor(cityRepository, redisClient) {
@@ -20,14 +21,7 @@ class CityService {
     return cached ? JSON.parse(cached) : null;
   }
 
-  async create(cityDto) {
-    const existing = await this.cityRepository.findByName(cityDto.name);
-    if (existing) {
-      throw new ConflictError('City name already exists');
-    }
-
-    const city = await this.cityRepository.create(cityDto);
-
+  async indexDocument(city) {
     try {
       await esClient.index({
         index: ES_INDEX,
@@ -44,16 +38,25 @@ class CityService {
         },
       });
     } catch (error) {
-      // ES indexing is non-blocking
+      // La indexación en Elasticsearch no bloquea la operación
+    }
+  }
+
+  async create(cityDto) {
+    const existing = await this.cityRepository.findByNameAndState(cityDto.name, cityDto.stateId);
+    if (existing) {
+      throw new ConflictError('Ya existe una ciudad con ese nombre en el departamento indicado');
     }
 
+    const city = await this.cityRepository.create(cityDto);
+    await this.indexDocument(city);
     await this.invalidateCache();
 
     return city;
   }
 
   async findAll({ page = 1, limit = 10 } = {}) {
-    const cacheKey = `cities:all:${page}:${limit}`;
+    const cacheKey = `${CACHE_PREFIX}:all:${page}:${limit}`;
     const cached = await this.getCache(cacheKey);
     if (cached) {
       return cached;
@@ -68,7 +71,7 @@ class CityService {
   }
 
   async findById(id) {
-    const cacheKey = `cities:${id}`;
+    const cacheKey = `${CACHE_PREFIX}:${id}`;
     const cached = await this.getCache(cacheKey);
     if (cached) {
       return cached;
@@ -76,7 +79,7 @@ class CityService {
 
     const city = await this.cityRepository.findById(id);
     if (!city) {
-      throw new NotFoundError('City not found');
+      throw new NotFoundError('Ciudad no encontrada');
     }
 
     await this.redisClient.set(cacheKey, JSON.stringify(city), env.CATALOG_CACHE_TTL);
@@ -85,7 +88,7 @@ class CityService {
   }
 
   async findByStateId(stateId) {
-    const cacheKey = `cities:state:${stateId}`;
+    const cacheKey = `${CACHE_PREFIX}:state:${stateId}`;
     const cached = await this.getCache(cacheKey);
     if (cached) {
       return cached;
@@ -102,38 +105,21 @@ class CityService {
   async update(id, cityDto) {
     const existing = await this.cityRepository.findById(id);
     if (!existing) {
-      throw new NotFoundError('City not found');
+      throw new NotFoundError('Ciudad no encontrada');
     }
 
-    if (cityDto.name && cityDto.name !== existing.name) {
-      const duplicate = await this.cityRepository.findByName(cityDto.name);
+    const name = cityDto.name ?? existing.name;
+    const stateId = cityDto.stateId ?? existing.stateId;
+    if (name !== existing.name || stateId !== existing.stateId) {
+      const duplicate = await this.cityRepository.findByNameAndState(name, stateId);
       if (duplicate) {
-        throw new ConflictError('City name already exists');
+        throw new ConflictError('Ya existe una ciudad con ese nombre en el departamento indicado');
       }
     }
 
     const updated = await this.cityRepository.update(id, cityDto);
-
-    try {
-      await esClient.index({
-        index: ES_INDEX,
-        id: String(updated.id),
-        document: {
-          id: updated.id,
-          uuid: updated.uuid,
-          name: updated.name,
-          daneCode: updated.daneCode,
-          stateId: updated.stateId,
-          active: updated.active,
-          createdAt: updated.created_at,
-          updatedAt: updated.updated_at,
-        },
-      });
-    } catch (error) {
-      // ES re-indexing is non-blocking
-    }
-
-    await this.invalidateCache();
+    await this.indexDocument(updated);
+    await this.invalidateCache(id);
 
     return updated;
   }
@@ -141,7 +127,7 @@ class CityService {
   async delete(id) {
     const existing = await this.cityRepository.findById(id);
     if (!existing) {
-      throw new NotFoundError('City not found');
+      throw new NotFoundError('Ciudad no encontrada');
     }
 
     await this.cityRepository.delete(id);
@@ -152,10 +138,10 @@ class CityService {
         id: String(id),
       });
     } catch (error) {
-      // ES delete is non-blocking
+      // La eliminación en Elasticsearch no bloquea la operación
     }
 
-    await this.invalidateCache();
+    await this.invalidateCache(id);
   }
 
   async search(query) {
@@ -180,14 +166,17 @@ class CityService {
         return hits.map((hit) => hit._source); // eslint-disable-line no-underscore-dangle
       }
     } catch (error) {
-      // Elasticsearch fallback to relational database
+      // Si Elasticsearch no responde se usa la base de datos relacional
     }
 
     return this.cityRepository.search(searchTerm);
   }
 
-  async invalidateCache() {
+  async invalidateCache(id) {
     const keys = Array.from(this.listKeys);
+    if (id !== undefined && id !== null) {
+      keys.push(`${CACHE_PREFIX}:${id}`);
+    }
     await Promise.all(keys.map((key) => this.redisClient.del(key)));
     this.listKeys.clear();
   }

@@ -3,6 +3,14 @@ const { createMysqlPool } = require('@uajs/database-client');
 const { env } = require('../../config/env');
 const { getPaginationMeta } = require('../../core/helpers/pagination.helper');
 
+const SELECT_FIELDS = `id, uuid, code, name,
+  requires_check_digit AS requiresCheckDigit,
+  applies_to_natural_person AS appliesToNaturalPerson,
+  applies_to_legal_entity AS appliesToLegalEntity,
+  is_active AS active, created_at, updated_at`;
+
+const toBit = (value, fallback) => ((value === undefined ? fallback : value) ? 1 : 0);
+
 class DocumentTypeRepository {
   constructor() {
     this.pool = null;
@@ -22,11 +30,23 @@ class DocumentTypeRepository {
     return this.pool;
   }
 
-  async create({ name, code, requiresCheckDigit }) {
+  async create({
+    code, name, requiresCheckDigit, appliesToNaturalPerson, appliesToLegalEntity,
+  }) {
     const pool = await this.getPool();
     const result = await pool.query(
-      'INSERT INTO document_types (name, code, requires_check_digit, is_active) VALUES (?, ?, ?, ?)',
-      [name, code ?? null, requiresCheckDigit ? 1 : 0, 1],
+      `INSERT INTO document_types (
+        code, name, requires_check_digit, applies_to_natural_person,
+        applies_to_legal_entity, is_active
+      ) VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        code,
+        name,
+        toBit(requiresCheckDigit, false),
+        toBit(appliesToNaturalPerson, true),
+        toBit(appliesToLegalEntity, false),
+        1,
+      ],
     );
     return this.findById(result.insertId);
   }
@@ -42,7 +62,7 @@ class DocumentTypeRepository {
     const { total } = countResult[0];
 
     const rows = await pool.query(
-      'SELECT id, uuid, name, code, requires_check_digit AS requiresCheckDigit, is_active AS active, created_at, updated_at FROM document_types WHERE is_active = ? ORDER BY id DESC LIMIT ? OFFSET ?',
+      `SELECT ${SELECT_FIELDS} FROM document_types WHERE is_active = ? ORDER BY id DESC LIMIT ? OFFSET ?`,
       [1, limit, offset],
     );
 
@@ -55,7 +75,7 @@ class DocumentTypeRepository {
   async findById(id) {
     const pool = await this.getPool();
     const rows = await pool.query(
-      'SELECT id, uuid, name, code, requires_check_digit AS requiresCheckDigit, is_active AS active, created_at, updated_at FROM document_types WHERE id = ? AND is_active = ?',
+      `SELECT ${SELECT_FIELDS} FROM document_types WHERE id = ? AND is_active = ?`,
       [id, 1],
     );
     return rows[0] || null;
@@ -64,7 +84,7 @@ class DocumentTypeRepository {
   async findByName(name) {
     const pool = await this.getPool();
     const rows = await pool.query(
-      'SELECT id, uuid, name, code, requires_check_digit AS requiresCheckDigit, is_active AS active, created_at, updated_at FROM document_types WHERE name = ? AND is_active = ?',
+      `SELECT ${SELECT_FIELDS} FROM document_types WHERE name = ? AND is_active = ?`,
       [name, 1],
     );
     return rows[0] || null;
@@ -73,28 +93,36 @@ class DocumentTypeRepository {
   async findByCode(code) {
     const pool = await this.getPool();
     const rows = await pool.query(
-      'SELECT id, uuid, name, code, requires_check_digit AS requiresCheckDigit, is_active AS active, created_at, updated_at FROM document_types WHERE code = ? AND is_active = ?',
+      `SELECT ${SELECT_FIELDS} FROM document_types WHERE code = ? AND is_active = ?`,
       [code, 1],
     );
     return rows[0] || null;
   }
 
-  async update(id, { name, code, requiresCheckDigit }) {
+  async update(id, dto) {
     const pool = await this.getPool();
     const sets = [];
     const params = [];
 
-    if (name !== undefined) {
+    if (dto.name !== undefined) {
       sets.push('name = ?');
-      params.push(name);
+      params.push(dto.name);
     }
-    if (code !== undefined) {
+    if (dto.code !== undefined) {
       sets.push('code = ?');
-      params.push(code ?? null);
+      params.push(dto.code);
     }
-    if (requiresCheckDigit !== undefined) {
+    if (dto.requiresCheckDigit !== undefined) {
       sets.push('requires_check_digit = ?');
-      params.push(requiresCheckDigit ? 1 : 0);
+      params.push(toBit(dto.requiresCheckDigit, false));
+    }
+    if (dto.appliesToNaturalPerson !== undefined) {
+      sets.push('applies_to_natural_person = ?');
+      params.push(toBit(dto.appliesToNaturalPerson, true));
+    }
+    if (dto.appliesToLegalEntity !== undefined) {
+      sets.push('applies_to_legal_entity = ?');
+      params.push(toBit(dto.appliesToLegalEntity, false));
     }
 
     if (sets.length > 0) {
@@ -118,19 +146,12 @@ class DocumentTypeRepository {
     const pool = await this.getPool();
     const pattern = `%${term}%`;
     const rows = await pool.query(
-      'SELECT id, uuid, name, code, requires_check_digit AS requiresCheckDigit, is_active AS active, created_at, updated_at FROM document_types WHERE is_active = ? AND (name LIKE ? OR code LIKE ?) ORDER BY name ASC LIMIT 50',
+      `SELECT ${SELECT_FIELDS} FROM document_types
+       WHERE is_active = ? AND (name LIKE ? OR code LIKE ?)
+       ORDER BY name ASC LIMIT 50`,
       [1, pattern, pattern],
     );
     return rows;
-  }
-
-  async countAll() {
-    const pool = await this.getPool();
-    const rows = await pool.query(
-      'SELECT COUNT(*) AS total FROM document_types WHERE is_active = ?',
-      [1],
-    );
-    return rows[0].total;
   }
 }
 

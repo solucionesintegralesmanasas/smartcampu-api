@@ -1,15 +1,15 @@
 const { z } = require('zod');
 
 const createSchema = z.object({
-  stateId: z.number().int().positive('stateId must be a positive integer'),
-  name: z.string().min(2, 'Name must be at least 2 characters'),
-  daneCode: z.string().max(10).optional(),
+  stateId: z.number().int().positive('stateId debe ser un entero positivo'),
+  name: z
+    .string()
+    .trim()
+    .min(2, 'El nombre debe tener al menos 2 caracteres')
+    .max(100, 'El nombre no puede superar 100 caracteres'),
+  daneCode: z.string().max(10, 'daneCode no puede superar 10 caracteres').nullable().optional(),
 });
 
-const updateSchema = z.object({
-  stateId: z.number().int().positive('stateId must be a positive integer').optional(),
-  name: z.string().min(2, 'Name must be at least 2 characters').optional(),
-  daneCode: z.string().max(10).optional(),
-});
+const updateSchema = createSchema.partial();
 
 module.exports = { createSchema, updateSchema };

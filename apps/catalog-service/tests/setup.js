@@ -9,6 +9,7 @@ jest.mock('../src/config/env', () => ({
   env: {
     NODE_ENV: 'test',
     PORT: 3003,
+    JWT_SECRET: 'test_secret_key_min_64_characters_long_for_jwt_security_purposes_here',
     MYSQL_HOST: 'localhost',
     MYSQL_PORT: 3306,
     MYSQL_USER: 'test_user',

@@ -28,6 +28,24 @@ const ensureCatalogIndex = async () => {
         },
       },
       {
+        name: 'countries',
+        body: {
+          mappings: {
+            properties: {
+              id: { type: 'integer' },
+              uuid: { type: 'keyword' },
+              name: { type: 'text', analyzer: 'spanish', fields: { keyword: { type: 'keyword' } } },
+              isoCode: { type: 'keyword' },
+              isoCode3: { type: 'keyword' },
+              phoneCode: { type: 'keyword' },
+              active: { type: 'boolean' },
+              createdAt: { type: 'date' },
+              updatedAt: { type: 'date' },
+            },
+          },
+        },
+      },
+      {
         name: 'departments',
         body: {
           mappings: {

@@ -3,6 +3,7 @@ const { env } = require('../../config/env');
 const { NotFoundError, ConflictError } = require('../../core/exceptions');
 
 const ES_INDEX = 'departments';
+const CACHE_PREFIX = 'departments';
 
 class DepartmentService {
   constructor(departmentRepository, redisClient) {
@@ -20,14 +21,7 @@ class DepartmentService {
     return cached ? JSON.parse(cached) : null;
   }
 
-  async create(departmentDto) {
-    const existing = await this.departmentRepository.findByName(departmentDto.name);
-    if (existing) {
-      throw new ConflictError('Department name already exists');
-    }
-
-    const department = await this.departmentRepository.create(departmentDto);
-
+  async indexDocument(department) {
     try {
       await esClient.index({
         index: ES_INDEX,
@@ -37,22 +31,35 @@ class DepartmentService {
           uuid: department.uuid,
           name: department.name,
           daneCode: department.daneCode,
+          countryId: department.countryId,
           active: department.active,
           createdAt: department.created_at,
           updatedAt: department.updated_at,
         },
       });
     } catch (error) {
-      // ES indexing is non-blocking
+      // La indexación en Elasticsearch no bloquea la operación
+    }
+  }
+
+  async create(departmentDto) {
+    const existing = await this.departmentRepository.findByNameAndCountry(
+      departmentDto.name,
+      departmentDto.countryId,
+    );
+    if (existing) {
+      throw new ConflictError('Ya existe un departamento con ese nombre en el país indicado');
     }
 
+    const department = await this.departmentRepository.create(departmentDto);
+    await this.indexDocument(department);
     await this.invalidateCache();
 
     return department;
   }
 
   async findAll({ page = 1, limit = 10 } = {}) {
-    const cacheKey = `departments:all:${page}:${limit}`;
+    const cacheKey = `${CACHE_PREFIX}:all:${page}:${limit}`;
     const cached = await this.getCache(cacheKey);
     if (cached) {
       return cached;
@@ -67,7 +74,7 @@ class DepartmentService {
   }
 
   async findById(id) {
-    const cacheKey = `departments:${id}`;
+    const cacheKey = `${CACHE_PREFIX}:${id}`;
     const cached = await this.getCache(cacheKey);
     if (cached) {
       return cached;
@@ -75,7 +82,7 @@ class DepartmentService {
 
     const department = await this.departmentRepository.findById(id);
     if (!department) {
-      throw new NotFoundError('Department not found');
+      throw new NotFoundError('Departamento no encontrado');
     }
 
     await this.redisClient.set(cacheKey, JSON.stringify(department), env.CATALOG_CACHE_TTL);
@@ -86,37 +93,21 @@ class DepartmentService {
   async update(id, departmentDto) {
     const existing = await this.departmentRepository.findById(id);
     if (!existing) {
-      throw new NotFoundError('Department not found');
+      throw new NotFoundError('Departamento no encontrado');
     }
 
-    if (departmentDto.name && departmentDto.name !== existing.name) {
-      const duplicate = await this.departmentRepository.findByName(departmentDto.name);
+    const name = departmentDto.name ?? existing.name;
+    const countryId = departmentDto.countryId ?? existing.countryId;
+    if (name !== existing.name || countryId !== existing.countryId) {
+      const duplicate = await this.departmentRepository.findByNameAndCountry(name, countryId);
       if (duplicate) {
-        throw new ConflictError('Department name already exists');
+        throw new ConflictError('Ya existe un departamento con ese nombre en el país indicado');
       }
     }
 
     const updated = await this.departmentRepository.update(id, departmentDto);
-
-    try {
-      await esClient.index({
-        index: ES_INDEX,
-        id: String(updated.id),
-        document: {
-          id: updated.id,
-          uuid: updated.uuid,
-          name: updated.name,
-          daneCode: updated.daneCode,
-          active: updated.active,
-          createdAt: updated.created_at,
-          updatedAt: updated.updated_at,
-        },
-      });
-    } catch (error) {
-      // ES re-indexing is non-blocking
-    }
-
-    await this.invalidateCache();
+    await this.indexDocument(updated);
+    await this.invalidateCache(id);
 
     return updated;
   }
@@ -124,7 +115,7 @@ class DepartmentService {
   async delete(id) {
     const existing = await this.departmentRepository.findById(id);
     if (!existing) {
-      throw new NotFoundError('Department not found');
+      throw new NotFoundError('Departamento no encontrado');
     }
 
     await this.departmentRepository.delete(id);
@@ -135,10 +126,10 @@ class DepartmentService {
         id: String(id),
       });
     } catch (error) {
-      // ES delete is non-blocking
+      // La eliminación en Elasticsearch no bloquea la operación
     }
 
-    await this.invalidateCache();
+    await this.invalidateCache(id);
   }
 
   async search(query) {
@@ -163,14 +154,17 @@ class DepartmentService {
         return hits.map((hit) => hit._source); // eslint-disable-line no-underscore-dangle
       }
     } catch (error) {
-      // Elasticsearch fallback to relational database
+      // Si Elasticsearch no responde se usa la base de datos relacional
     }
 
     return this.departmentRepository.search(searchTerm);
   }
 
-  async invalidateCache() {
+  async invalidateCache(id) {
     const keys = Array.from(this.listKeys);
+    if (id !== undefined && id !== null) {
+      keys.push(`${CACHE_PREFIX}:${id}`);
+    }
     await Promise.all(keys.map((key) => this.redisClient.del(key)));
     this.listKeys.clear();
   }

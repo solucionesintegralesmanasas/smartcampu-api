@@ -3,6 +3,7 @@ const { env } = require('../../config/env');
 const { NotFoundError, ConflictError } = require('../../core/exceptions');
 
 const ES_INDEX = 'campuses';
+const CACHE_PREFIX = 'campuses';
 
 class CampusService {
   constructor(campusRepository, redisClient) {
@@ -20,14 +21,7 @@ class CampusService {
     return cached ? JSON.parse(cached) : null;
   }
 
-  async create(campusDto) {
-    const existing = await this.campusRepository.findByName(campusDto.name);
-    if (existing) {
-      throw new ConflictError('Campus name already exists');
-    }
-
-    const campus = await this.campusRepository.create(campusDto);
-
+  async indexDocument(campus) {
     try {
       await esClient.index({
         index: ES_INDEX,
@@ -45,16 +39,25 @@ class CampusService {
         },
       });
     } catch (error) {
-      // ES indexing is non-blocking
+      // La indexación en Elasticsearch no bloquea la operación
+    }
+  }
+
+  async create(campusDto) {
+    const existing = await this.campusRepository.findByName(campusDto.name);
+    if (existing) {
+      throw new ConflictError('Ya existe una sede con ese nombre');
     }
 
+    const campus = await this.campusRepository.create(campusDto);
+    await this.indexDocument(campus);
     await this.invalidateCache();
 
     return campus;
   }
 
   async findAll({ page = 1, limit = 10 } = {}) {
-    const cacheKey = `campuses:all:${page}:${limit}`;
+    const cacheKey = `${CACHE_PREFIX}:all:${page}:${limit}`;
     const cached = await this.getCache(cacheKey);
     if (cached) {
       return cached;
@@ -69,7 +72,7 @@ class CampusService {
   }
 
   async findById(id) {
-    const cacheKey = `campuses:${id}`;
+    const cacheKey = `${CACHE_PREFIX}:${id}`;
     const cached = await this.getCache(cacheKey);
     if (cached) {
       return cached;
@@ -77,7 +80,7 @@ class CampusService {
 
     const campus = await this.campusRepository.findById(id);
     if (!campus) {
-      throw new NotFoundError('Campus not found');
+      throw new NotFoundError('Sede no encontrada');
     }
 
     await this.redisClient.set(cacheKey, JSON.stringify(campus), env.CATALOG_CACHE_TTL);
@@ -86,7 +89,7 @@ class CampusService {
   }
 
   async findByCityId(cityId) {
-    const cacheKey = `campuses:city:${cityId}`;
+    const cacheKey = `${CACHE_PREFIX}:city:${cityId}`;
     const cached = await this.getCache(cacheKey);
     if (cached) {
       return cached;
@@ -103,39 +106,19 @@ class CampusService {
   async update(id, campusDto) {
     const existing = await this.campusRepository.findById(id);
     if (!existing) {
-      throw new NotFoundError('Campus not found');
+      throw new NotFoundError('Sede no encontrada');
     }
 
     if (campusDto.name && campusDto.name !== existing.name) {
       const duplicate = await this.campusRepository.findByName(campusDto.name);
       if (duplicate) {
-        throw new ConflictError('Campus name already exists');
+        throw new ConflictError('Ya existe una sede con ese nombre');
       }
     }
 
     const updated = await this.campusRepository.update(id, campusDto);
-
-    try {
-      await esClient.index({
-        index: ES_INDEX,
-        id: String(updated.id),
-        document: {
-          id: updated.id,
-          uuid: updated.uuid,
-          name: updated.name,
-          address: updated.address,
-          phone: updated.phone,
-          cityId: updated.cityId,
-          active: updated.active,
-          createdAt: updated.created_at,
-          updatedAt: updated.updated_at,
-        },
-      });
-    } catch (error) {
-      // ES re-indexing is non-blocking
-    }
-
-    await this.invalidateCache();
+    await this.indexDocument(updated);
+    await this.invalidateCache(id);
 
     return updated;
   }
@@ -143,7 +126,7 @@ class CampusService {
   async delete(id) {
     const existing = await this.campusRepository.findById(id);
     if (!existing) {
-      throw new NotFoundError('Campus not found');
+      throw new NotFoundError('Sede no encontrada');
     }
 
     await this.campusRepository.delete(id);
@@ -154,10 +137,10 @@ class CampusService {
         id: String(id),
       });
     } catch (error) {
-      // ES delete is non-blocking
+      // La eliminación en Elasticsearch no bloquea la operación
     }
 
-    await this.invalidateCache();
+    await this.invalidateCache(id);
   }
 
   async search(query) {
@@ -182,14 +165,17 @@ class CampusService {
         return hits.map((hit) => hit._source); // eslint-disable-line no-underscore-dangle
       }
     } catch (error) {
-      // Elasticsearch fallback to relational database
+      // Si Elasticsearch no responde se usa la base de datos relacional
     }
 
     return this.campusRepository.search(searchTerm);
   }
 
-  async invalidateCache() {
+  async invalidateCache(id) {
     const keys = Array.from(this.listKeys);
+    if (id !== undefined && id !== null) {
+      keys.push(`${CACHE_PREFIX}:${id}`);
+    }
     await Promise.all(keys.map((key) => this.redisClient.del(key)));
     this.listKeys.clear();
   }

@@ -1,3 +1,5 @@
+const { paginationHelper } = require('../../core/helpers/pagination.helper');
+
 class CampusController {
   constructor(campusService) {
     this.campusService = campusService;
@@ -14,16 +16,9 @@ class CampusController {
 
   async findAll(req, res, next) {
     try {
-      const { page = 1, limit = 10 } = req.query;
-      const result = await this.campusService.findAll({
-        page: parseInt(page, 10),
-        limit: parseInt(limit, 10),
-      });
-      res.status(200).json({
-        success: true,
-        data: result.data,
-        pagination: result.pagination,
-      });
+      const { page, limit } = paginationHelper(req.query.page, req.query.limit ?? 10);
+      const result = await this.campusService.findAll({ page, limit });
+      res.status(200).json({ success: true, data: result.data, meta: result.pagination });
     } catch (error) {
       next(error);
     }
@@ -59,7 +54,7 @@ class CampusController {
   async delete(req, res, next) {
     try {
       await this.campusService.delete(req.params.id);
-      res.status(200).json({ success: true, message: 'Campus deleted successfully' });
+      res.status(200).json({ success: true, message: 'Sede eliminada correctamente' });
     } catch (error) {
       next(error);
     }
@@ -67,8 +62,7 @@ class CampusController {
 
   async search(req, res, next) {
     try {
-      const { search } = req.query;
-      const result = await this.campusService.search(search);
+      const result = await this.campusService.search(req.query.search);
       res.status(200).json({ success: true, data: result });
     } catch (error) {
       next(error);
