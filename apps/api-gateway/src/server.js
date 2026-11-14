@@ -5,7 +5,7 @@ const tokenBucket = require('./core/rateLimiter/tokenBucket');
 
 const { PORT } = env;
 
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   logger.info(`API Gateway escuchando en puerto ${PORT} (${env.NODE_ENV})`);
 });
 
