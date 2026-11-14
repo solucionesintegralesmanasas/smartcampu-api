@@ -1,5 +1,5 @@
 # Configuración de Fly.io para api-gateway (punto de entrada público)
-app = "uajs-smartcampus-api-gateway"
+app = "smartcampu-api"
 primary_region = "bog"
 
 [build]
