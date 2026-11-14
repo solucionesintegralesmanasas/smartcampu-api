@@ -1,0 +1,336 @@
+openapi: 3.0.0
+info:
+  title: API de PQRS (pqrs-service)
+  version: 1.0.0
+  description: >
+    Peticiones, quejas, reclamos, sugerencias y felicitaciones de UAJS Smart Campus.
+    La radicación y la consulta por radicado son públicas. La gestión (asignación,
+    respuestas y cambios de estado) requiere rol STAFF o ADMIN.
+servers:
+  - url: /api/v1/pqrs
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              message: { type: string }
+    Meta:
+      type: object
+      properties:
+        page: { type: integer, example: 1 }
+        limit: { type: integer, example: 20 }
+        total: { type: integer, example: 42 }
+        totalPages: { type: integer, example: 3 }
+    Tipo:
+      type: object
+      properties:
+        codigo: { type: string, example: QUEJA }
+        nombre: { type: string, example: Queja }
+        plazoDias: { type: integer, example: 15 }
+    Estado:
+      type: object
+      properties:
+        codigo:
+          type: string
+          enum: [radicada, en_tramite, respondida, cerrada]
+        nombre: { type: string }
+        colorHex: { type: string, example: '#F59E0B' }
+    CrearPqrs:
+      type: object
+      required: [tipoCodigo, asunto, descripcion]
+      properties:
+        tipoCodigo: { type: string, example: QUEJA }
+        asunto: { type: string, example: 'Ruido en la biblioteca' }
+        descripcion: { type: string, example: 'El ruido nocturno impide estudiar...' }
+        anonima: { type: boolean, default: false }
+        email: { type: string, format: email, description: 'Obligatorio si anonima es true' }
+    Respuesta:
+      type: object
+      properties:
+        uuid: { type: string, format: uuid }
+        respondedor:
+          type: object
+          properties:
+            uuid: { type: string, format: uuid }
+            nombre: { type: string }
+        cuerpo: { type: string }
+        esFinal: { type: boolean }
+        creadaEn: { type: string, format: date-time }
+    PqrsResumen:
+      type: object
+      properties:
+        uuid: { type: string, format: uuid }
+        numeroRadicado: { type: string, example: PQRS-2026-000001 }
+        asunto: { type: string }
+        esAnonima: { type: boolean }
+        estado: { $ref: '#/components/schemas/Estado' }
+        tipo: { $ref: '#/components/schemas/Tipo' }
+        solicitante:
+          type: object
+          properties:
+            uuid: { type: string, format: uuid, nullable: true }
+            nombre: { type: string }
+        asignado:
+          type: object
+          nullable: true
+          properties:
+            uuid: { type: string, format: uuid }
+            nombre: { type: string }
+        fechaRadicacion: { type: string, format: date-time }
+        fechaLimite: { type: string, format: date }
+        fechaRespuesta: { type: string, format: date-time, nullable: true }
+        fechaCierre: { type: string, format: date-time, nullable: true }
+        calificacion: { type: integer, nullable: true, minimum: 1, maximum: 5 }
+    PqrsDetalle:
+      allOf:
+        - $ref: '#/components/schemas/PqrsResumen'
+        - type: object
+          properties:
+            descripcion: { type: string }
+            respuestas:
+              type: array
+              items: { $ref: '#/components/schemas/Respuesta' }
+paths:
+  /tipos:
+    get:
+      tags: [Catálogos]
+      summary: Lista los tipos de PQRS y su plazo en días hábiles
+      responses:
+        '200':
+          description: Lista de tipos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Tipo' }
+  /estados:
+    get:
+      tags: [Catálogos]
+      summary: Lista los estados de PQRS
+      responses:
+        '200':
+          description: Lista de estados
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Estado' }
+  /:
+    post:
+      tags: [PQRS]
+      summary: Radica una nueva PQRS (identificada o anónima)
+      security:
+        - bearerAuth: []
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CrearPqrs' }
+      responses:
+        '201':
+          description: PQRS radicada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      uuid: { type: string, format: uuid }
+                      numeroRadicado: { type: string, example: PQRS-2026-000001 }
+                      fechaLimite: { type: string, format: date }
+        '400':
+          description: Datos inválidos
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    get:
+      tags: [PQRS]
+      summary: Lista todas las PQRS (solo personal)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, default: 20 } }
+        - { in: query, name: estado, schema: { type: string, enum: [radicada, en_tramite, respondida, cerrada] } }
+        - { in: query, name: tipoCodigo, schema: { type: string } }
+        - { in: query, name: vencidas, schema: { type: boolean } }
+      responses:
+        '200':
+          description: Lista paginada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/PqrsResumen' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+  /consulta/{ticket}:
+    get:
+      tags: [PQRS]
+      summary: Consulta pública del estado de una PQRS por radicado y correo
+      parameters:
+        - { in: path, name: ticket, required: true, schema: { type: string, example: PQRS-2026-000001 } }
+        - { in: query, name: email, required: true, schema: { type: string, format: email } }
+      responses:
+        '200':
+          description: Estado público de la PQRS
+        '404':
+          description: No encontrada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /mias:
+    get:
+      tags: [PQRS]
+      summary: Lista las PQRS del usuario autenticado
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, default: 20 } }
+      responses:
+        '200':
+          description: Lista paginada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/PqrsResumen' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+  /{uuid}:
+    get:
+      tags: [PQRS]
+      summary: Detalle de una PQRS (dueño o personal)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: path, name: uuid, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Detalle
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: '#/components/schemas/PqrsDetalle' }
+        '403':
+          description: Sin permisos
+  /{uuid}/asignacion:
+    patch:
+      tags: [PQRS]
+      summary: Asigna la PQRS a un funcionario (mueve a en_tramite)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: path, name: uuid, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [asignadoUuid, asignadoNombre]
+              properties:
+                asignadoUuid: { type: string, format: uuid }
+                asignadoNombre: { type: string }
+      responses:
+        '200':
+          description: PQRS asignada
+  /{uuid}/respuestas:
+    post:
+      tags: [PQRS]
+      summary: Registra una respuesta. Si esFinal, pasa a respondida y publica el evento
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: path, name: uuid, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cuerpo]
+              properties:
+                cuerpo: { type: string }
+                esFinal: { type: boolean, default: false }
+      responses:
+        '201':
+          description: Respuesta registrada
+  /{uuid}/estado:
+    patch:
+      tags: [PQRS]
+      summary: Cambia el estado de la PQRS validando la transición
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: path, name: uuid, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [estado]
+              properties:
+                estado: { type: string, enum: [radicada, en_tramite, respondida, cerrada] }
+                comentario: { type: string, nullable: true }
+      responses:
+        '200':
+          description: Estado actualizado
+        '409':
+          description: Transición no permitida
+  /{uuid}/calificacion:
+    post:
+      tags: [PQRS]
+      summary: Califica la atención recibida (1 a 5)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: path, name: uuid, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [puntaje]
+              properties:
+                puntaje: { type: integer, minimum: 1, maximum: 5 }
+      responses:
+        '200':
+          description: Calificación registrada
