@@ -1,0 +1,159 @@
+openapi: 3.0.0
+info:
+  title: API de Reservas (booking-service)
+  version: 1.0.0
+  description: >
+    Reservas de recursos del campus. Requiere Bearer JWT. El cambio de estado y la consulta
+    total están restringidos a ADMIN o STAFF; el resto ve solo sus reservas.
+servers:
+  - url: /api/v1/reservas
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string }
+    Meta:
+      type: object
+      properties:
+        page: { type: integer, example: 1 }
+        limit: { type: integer, example: 20 }
+        total: { type: integer, example: 42 }
+        totalPages: { type: integer, example: 3 }
+    Reserva:
+      type: object
+      properties:
+        uuid: { type: string, format: uuid }
+        referencia: { type: string, example: BK-2026-AB12CD34 }
+        tipo: { type: object }
+        estado:
+          type: object
+          properties:
+            codigo: { type: string, enum: [pending, approved, confirmed, rejected, cancelled, completed, no_show] }
+            nombre: { type: string }
+        recurso: { type: object }
+        solicitante: { type: object }
+        titulo: { type: string }
+        fecha: { type: string, format: date }
+        horaInicio: { type: string, example: '08:00:00' }
+        horaFin: { type: string, example: '10:00:00' }
+paths:
+  /tipos:
+    get:
+      tags: [Catálogos]
+      summary: Lista los tipos de reserva
+      security:
+        - bearerAuth: []
+      responses:
+        '200': { description: Lista de tipos }
+  /estados:
+    get:
+      tags: [Catálogos]
+      summary: Lista los estados de reserva
+      security:
+        - bearerAuth: []
+      responses:
+        '200': { description: Lista de estados }
+  /:
+    post:
+      tags: [Reservas]
+      summary: Crea una reserva en estado pending (valida disponibilidad y solapes)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tipoCodigo, recursoUuid, titulo, fecha, horaInicio, horaFin]
+              properties:
+                tipoCodigo: { type: string }
+                recursoUuid: { type: string, format: uuid }
+                titulo: { type: string }
+                descripcion: { type: string, nullable: true }
+                fecha: { type: string, format: date }
+                horaInicio: { type: string, example: '08:00' }
+                horaFin: { type: string, example: '10:00' }
+                asistentesEsperados: { type: integer, nullable: true }
+      responses:
+        '201': { description: Reserva creada }
+        '409': { description: Recurso no disponible o solape }
+    get:
+      tags: [Reservas]
+      summary: Lista reservas (gestión ve todas; el resto solo las propias)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, default: 20 } }
+        - { in: query, name: estado, schema: { type: string } }
+        - { in: query, name: recursoUuid, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Lista paginada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { type: array, items: { $ref: '#/components/schemas/Reserva' } }
+                  meta: { $ref: '#/components/schemas/Meta' }
+  /{uuid}:
+    get:
+      tags: [Reservas]
+      summary: Detalle de una reserva con su historial (dueño o gestión)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: path, name: uuid, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Detalle de la reserva }
+        '403': { description: Sin permisos }
+  /{uuid}/estado:
+    patch:
+      tags: [Reservas]
+      summary: Cambia el estado de una reserva (ADMIN o STAFF)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: path, name: uuid, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [estado]
+              properties:
+                estado: { type: string, enum: [approved, rejected, confirmed, completed, no_show] }
+                comentario: { type: string, nullable: true }
+      responses:
+        '200': { description: Estado actualizado }
+        '409': { description: Transición no permitida }
+  /{uuid}/cancelar:
+    post:
+      tags: [Reservas]
+      summary: Cancela una reserva confirmada (dueño o ADMIN)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: path, name: uuid, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                comentario: { type: string, nullable: true }
+      responses:
+        '200': { description: Reserva cancelada }
+        '409': { description: Transición no permitida }
