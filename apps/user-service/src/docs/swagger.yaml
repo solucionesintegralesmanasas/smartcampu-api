@@ -1,0 +1,281 @@
+openapi: 3.0.0
+info:
+  title: API de Usuarios - Smart Campus
+  version: 1.0.0
+  description: >-
+    Perfiles y preferencias de los usuarios. La identidad (cuenta, roles y
+    contraseñas) vive en auth-service (uajs_auth) y NO se duplica aquí. Los
+    registros se indexan por user_id, que corresponde al claim `sub` del JWT.
+servers:
+  - url: /api/v1
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    userId:
+      name: userId
+      in: path
+      required: true
+      description: ID numérico del usuario en uajs_auth.
+      schema: { type: integer, minimum: 1 }
+  schemas:
+    Perfil:
+      type: object
+      properties:
+        id: { type: integer }
+        uuid: { type: string, format: uuid }
+        userId: { type: integer, description: 'ID del usuario en uajs_auth (sub del JWT)' }
+        firstName: { type: string }
+        lastName: { type: string }
+        documentNumber: { type: string, nullable: true }
+        phone: { type: string, nullable: true }
+        avatarFileUuid:
+          type: string
+          format: uuid
+          nullable: true
+          description: UUID del archivo de avatar en uajs_storage
+        birthDate: { type: string, format: date, nullable: true }
+        cityCode: { type: string, nullable: true, description: 'Código DANE del municipio' }
+        timezone: { type: string, example: America/Bogota }
+        locale: { type: string, example: es-CO }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    PerfilInput:
+      type: object
+      required: [firstName, lastName]
+      properties:
+        firstName: { type: string, minLength: 2, maxLength: 80 }
+        lastName: { type: string, minLength: 2, maxLength: 80 }
+        documentNumber: { type: string, minLength: 5, maxLength: 20, nullable: true }
+        phone: { type: string, minLength: 7, maxLength: 20, nullable: true }
+        avatarFileUuid: { type: string, format: uuid, nullable: true }
+        birthDate: { type: string, format: date, nullable: true, description: 'No puede ser futura' }
+        cityCode: { type: string, maxLength: 10, nullable: true }
+        timezone: { type: string, default: America/Bogota }
+        locale: { type: string, default: es-CO, description: 'Formato BCP 47' }
+    Preferencias:
+      type: object
+      properties:
+        id: { type: integer, nullable: true, description: 'null si nunca se han guardado' }
+        uuid: { type: string, format: uuid, nullable: true }
+        userId: { type: integer }
+        notifyEmail: { type: boolean }
+        notifyPush: { type: boolean }
+        quietHoursStart: { type: string, example: '22:00', nullable: true }
+        quietHoursEnd: { type: string, example: '07:00', nullable: true }
+        updatedAt: { type: string, format: date-time, nullable: true }
+    PreferenciasInput:
+      type: object
+      properties:
+        notifyEmail: { type: boolean, default: true }
+        notifyPush: { type: boolean, default: true }
+        quietHoursStart:
+          type: string
+          nullable: true
+          example: '22:00'
+          description: Debe enviarse junto con quietHoursEnd (ambos null o ambos informados)
+        quietHoursEnd:
+          type: string
+          nullable: true
+          example: '07:00'
+    Paginacion:
+      type: object
+      properties:
+        page: { type: integer }
+        limit: { type: integer, maximum: 100 }
+        total: { type: integer }
+        totalPages: { type: integer }
+    Error:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              message: { type: string }
+  responses:
+    Unauthorized:
+      description: Token ausente, inválido o expirado
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: El rol del usuario no tiene permiso para esta acción
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ValidationError:
+      description: Datos de entrada inválidos
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Recurso no encontrado
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+paths:
+  /usuarios/me:
+    get:
+      summary: Perfil del usuario autenticado
+      description: >-
+        Devuelve el perfil del usuario del token. Si el perfil aún no existe
+        responde 404; en ese caso el cliente debe crearlo con PUT /usuarios/me.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Perfil encontrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: '#/components/schemas/Perfil' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      summary: Crear o actualizar el perfil del usuario autenticado (upsert)
+      description: >-
+        Reemplaza el perfil completo del usuario del token. Si no existe, lo
+        crea; si existe (incluso si fue eliminado lógicamente), lo actualiza y
+        lo reactiva. Los campos opcionales omitidos quedan en null (o con su
+        valor por defecto para timezone y locale).
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PerfilInput' }
+      responses:
+        '200':
+          description: Perfil guardado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: '#/components/schemas/Perfil' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /usuarios/me/preferencias:
+    get:
+      summary: Preferencias del usuario autenticado
+      description: >-
+        Si el usuario nunca guardó preferencias, responde los valores por
+        defecto (notificaciones activas, sin horario de silencio) con id y uuid en null.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Preferencias del usuario
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: '#/components/schemas/Preferencias' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    put:
+      summary: Crear o actualizar las preferencias del usuario autenticado (upsert)
+      description: Reemplaza el conjunto completo de preferencias. Los campos omitidos toman su valor por defecto.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PreferenciasInput' }
+      responses:
+        '200':
+          description: Preferencias guardadas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: '#/components/schemas/Preferencias' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /usuarios:
+    get:
+      summary: Listar perfiles (paginado y con búsqueda)
+      description: Búsqueda por nombre, apellido o número de documento. Solo ADMIN o STAFF.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: search
+          in: query
+          schema: { type: string, maxLength: 100 }
+          description: Texto a buscar en nombres, apellidos o documento
+      responses:
+        '200':
+          description: Lista paginada de perfiles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Perfil' }
+                  meta: { $ref: '#/components/schemas/Paginacion' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /usuarios/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/userId'
+    get:
+      summary: Perfil de un usuario por ID
+      description: Solo ADMIN o STAFF.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Perfil encontrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: '#/components/schemas/Perfil' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      summary: Eliminar perfil (borrado lógico)
+      description: Solo ADMIN. Marca deleted_at; el perfil deja de aparecer en consultas y listados.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Perfil eliminado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      message: { type: string, example: Perfil eliminado correctamente }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
