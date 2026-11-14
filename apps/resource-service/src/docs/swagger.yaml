@@ -1,0 +1,179 @@
+openapi: 3.0.0
+info:
+  title: API de Recursos (resource-service)
+  version: 1.0.0
+  description: >
+    Catálogo de recursos reservables del campus: categorías, estados, recursos, horarios,
+    bloqueos, inventario y consulta de disponibilidad. La escritura requiere rol ADMIN o STAFF.
+servers:
+  - url: /api/v1/recursos
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string }
+    Meta:
+      type: object
+      properties:
+        page: { type: integer, example: 1 }
+        limit: { type: integer, example: 20 }
+        total: { type: integer, example: 42 }
+        totalPages: { type: integer, example: 3 }
+    Disponibilidad:
+      type: object
+      properties:
+        disponible: { type: boolean }
+        motivo: { type: string, nullable: true }
+        recurso:
+          type: object
+          properties:
+            id: { type: integer }
+            uuid: { type: string, format: uuid }
+            nombre: { type: string }
+paths:
+  /categorias:
+    get:
+      tags: [Catálogos]
+      summary: Lista las categorías de recursos
+      responses:
+        '200': { description: Lista de categorías }
+  /estados:
+    get:
+      tags: [Catálogos]
+      summary: Lista los estados de recursos
+      responses:
+        '200': { description: Lista de estados }
+  /:
+    get:
+      tags: [Recursos]
+      summary: Lista recursos con filtros
+      parameters:
+        - { in: query, name: search, schema: { type: string } }
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, default: 20 } }
+      responses:
+        '200':
+          description: Lista paginada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { type: array, items: { type: object } }
+                  meta: { $ref: '#/components/schemas/Meta' }
+    post:
+      tags: [Recursos]
+      summary: Crea un recurso (ADMIN o STAFF)
+      security:
+        - bearerAuth: []
+      responses:
+        '201': { description: Recurso creado }
+  /{id}:
+    get:
+      tags: [Recursos]
+      summary: Obtiene un recurso por id o uuid
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Recurso }
+        '404': { description: No encontrado }
+    put:
+      tags: [Recursos]
+      summary: Actualiza un recurso (ADMIN o STAFF)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Recurso actualizado }
+    delete:
+      tags: [Recursos]
+      summary: Elimina (soft delete) un recurso (ADMIN o STAFF)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Recurso eliminado }
+  /{id}/horarios:
+    get:
+      tags: [Horarios]
+      summary: Lista el horario semanal del recurso
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Horarios }
+    put:
+      tags: [Horarios]
+      summary: Reemplaza el horario semanal del recurso (ADMIN o STAFF)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Horario reemplazado }
+  /{id}/bloqueos:
+    get:
+      tags: [Bloqueos]
+      summary: Lista los bloqueos del recurso
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Bloqueos }
+    post:
+      tags: [Bloqueos]
+      summary: Crea un bloqueo (ADMIN o STAFF)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '201': { description: Bloqueo creado }
+  /{id}/bloqueos/{bloqueoId}:
+    delete:
+      tags: [Bloqueos]
+      summary: Elimina un bloqueo (ADMIN o STAFF)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: path, name: bloqueoId, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Bloqueo eliminado }
+  /{id}/inventario:
+    get:
+      tags: [Inventario]
+      summary: Lista el inventario del recurso
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Inventario }
+  /{id}/disponibilidad:
+    get:
+      tags: [Disponibilidad]
+      summary: Consulta la disponibilidad de un recurso (contrato interno para booking-service)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: query, name: fecha, required: true, schema: { type: string, format: date } }
+        - { in: query, name: horaInicio, required: true, schema: { type: string, example: '08:00' } }
+        - { in: query, name: horaFin, required: true, schema: { type: string, example: '10:00' } }
+      responses:
+        '200':
+          description: Resultado de disponibilidad
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: '#/components/schemas/Disponibilidad' }
