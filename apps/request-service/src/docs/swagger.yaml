@@ -1,0 +1,356 @@
+openapi: 3.0.0
+info:
+  title: API de Solicitudes (request-service)
+  version: 1.0.0
+  description: >
+    Mesa de servicio de UAJS Smart Campus: certificados, trámites académicos y peticiones generales.
+    Todas las rutas requieren Bearer JWT emitido por auth-service. Las rutas de cambio de estado
+    requieren rol STAFF o ADMIN.
+servers:
+  - url: /api/v1/solicitudes
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              message: { type: string }
+    Meta:
+      type: object
+      properties:
+        page: { type: integer, example: 1 }
+        limit: { type: integer, example: 20 }
+        total: { type: integer, example: 42 }
+        totalPages: { type: integer, example: 3 }
+    Estado:
+      type: object
+      properties:
+        codigo:
+          type: string
+          enum: [pending, in_review, approved, rejected, closed]
+        nombre: { type: string }
+        colorHex: { type: string, example: '#F59E0B' }
+    Solicitud:
+      type: object
+      properties:
+        uuid: { type: string, format: uuid }
+        numeroSolicitud: { type: string, example: REQ-2026-000001 }
+        titulo: { type: string }
+        descripcion: { type: string }
+        formData: { type: object, nullable: true }
+        estado: { $ref: '#/components/schemas/Estado' }
+        tipo:
+          type: object
+          properties:
+            uuid: { type: string, format: uuid }
+            codigo: { type: string }
+            nombre: { type: string }
+            requiereAprobacion: { type: boolean }
+        solicitante:
+          type: object
+          properties:
+            uuid: { type: string, description: 'Id numérico de auth como cadena (el token no trae UUID)' }
+            nombre: { type: string }
+        asignado:
+          type: object
+          nullable: true
+          properties:
+            uuid: { type: string }
+            nombre: { type: string, nullable: true }
+        fechaLimite: { type: string, format: date, nullable: true }
+        fechaResolucion: { type: string, format: date-time, nullable: true }
+        creadaEn: { type: string, format: date-time }
+        actualizadaEn: { type: string, format: date-time }
+        comentarios:
+          type: array
+          items: { $ref: '#/components/schemas/Comentario' }
+        adjuntos:
+          type: array
+          items: { $ref: '#/components/schemas/Adjunto' }
+    Comentario:
+      type: object
+      properties:
+        uuid: { type: string, format: uuid }
+        autor:
+          type: object
+          properties:
+            uuid: { type: string }
+            nombre: { type: string }
+        contenido: { type: string }
+        esInterno:
+          type: boolean
+          description: Las notas internas solo son visibles para el personal.
+        creadoEn: { type: string, format: date-time }
+    Adjunto:
+      type: object
+      properties:
+        uuid: { type: string, format: uuid }
+        fileUuid: { type: string, format: uuid, description: 'Identificador en el servicio de almacenamiento' }
+        nombreOriginal: { type: string }
+        mimeType: { type: string }
+        tamanoBytes: { type: integer }
+        subidoPorUuid: { type: string }
+        subidoEn: { type: string, format: date-time }
+security:
+  - bearerAuth: []
+paths:
+  /categorias:
+    get:
+      summary: Lista las categorías activas de solicitudes
+      responses:
+        '200':
+          description: Categorías ordenadas por sort_order
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        uuid: { type: string, format: uuid }
+                        codigo: { type: string }
+                        nombre: { type: string }
+                        icono: { type: string, nullable: true }
+                        orden: { type: integer }
+        '401': { description: Token ausente o inválido }
+  /tipos:
+    get:
+      summary: Lista los tipos de solicitud activos
+      parameters:
+        - in: query
+          name: categoriaUuid
+          schema: { type: string, format: uuid }
+          description: Filtra los tipos por categoría
+      responses:
+        '200':
+          description: Tipos de solicitud con SLA y esquema de formulario
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        uuid: { type: string, format: uuid }
+                        codigo: { type: string }
+                        nombre: { type: string }
+                        descripcion: { type: string, nullable: true }
+                        requiereAprobacion: { type: boolean }
+                        slaDias: { type: integer, nullable: true, description: 'Días hábiles' }
+                        costo: { type: number, nullable: true }
+                        formSchema: { type: object, nullable: true }
+                        categoriaUuid: { type: string, format: uuid }
+                        categoriaCodigo: { type: string }
+        '400': { description: Parámetros inválidos }
+  /estados:
+    get:
+      summary: Lista los estados del ciclo de vida de una solicitud
+      responses:
+        '200':
+          description: Catálogo de estados
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        uuid: { type: string, format: uuid }
+                        codigo: { type: string }
+                        nombre: { type: string }
+                        esTerminal: { type: boolean }
+                        colorHex: { type: string, nullable: true }
+  "/":
+    post:
+      summary: Radica una nueva solicitud en estado pending
+      description: >
+        Genera el número REQ-AAAA-NNNNNN y calcula fechaLimite sumando slaDias días hábiles
+        (lunes a viernes, excluyendo los festivos de la variable HOLIDAYS).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tipoUuid, titulo, descripcion]
+              properties:
+                tipoUuid: { type: string, format: uuid }
+                titulo: { type: string, minLength: 3, maxLength: 200 }
+                descripcion: { type: string, minLength: 10, maxLength: 5000 }
+                formData: { type: object, nullable: true }
+      responses:
+        '201':
+          description: Solicitud creada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: '#/components/schemas/Solicitud' }
+        '400': { description: Datos inválidos, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '404': { description: Tipo de solicitud inexistente o inactivo }
+    get:
+      summary: Lista solicitudes con paginación
+      description: >
+        Los usuarios normales ven solo sus solicitudes. STAFF y ADMIN ven todas y pueden filtrar
+        por asignadoUuid.
+      parameters:
+        - { in: query, name: page, schema: { type: integer, minimum: 1, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { in: query, name: estado, schema: { type: string, enum: [pending, in_review, approved, rejected, closed] } }
+        - { in: query, name: tipoUuid, schema: { type: string, format: uuid } }
+        - { in: query, name: asignadoUuid, schema: { type: string, format: uuid }, description: 'Solo STAFF/ADMIN' }
+      responses:
+        '200':
+          description: Listado paginado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Solicitud' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '400': { description: Parámetros inválidos }
+  /{uuid}:
+    parameters:
+      - { in: path, name: uuid, required: true, schema: { type: string, format: uuid } }
+    get:
+      summary: Detalle de una solicitud
+      description: >
+        Solicitante o personal. Las notas internas solo se incluyen para el personal.
+      responses:
+        '200':
+          description: Detalle con comentarios y adjuntos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: '#/components/schemas/Solicitud' }
+        '400': { description: UUID inválido }
+        '403': { description: No es el solicitante ni personal }
+        '404': { description: Solicitud inexistente }
+  /{uuid}/comentarios:
+    parameters:
+      - { in: path, name: uuid, required: true, schema: { type: string, format: uuid } }
+    post:
+      summary: Agrega un comentario a la solicitud
+      description: El solicitante no puede crear notas internas (esInterno = true).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [contenido]
+              properties:
+                contenido: { type: string, minLength: 1, maxLength: 5000 }
+                esInterno: { type: boolean, default: false }
+      responses:
+        '201':
+          description: Comentario creado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: '#/components/schemas/Comentario' }
+        '400': { description: Datos inválidos }
+        '403': { description: Sin permiso o nota interna para el solicitante }
+        '404': { description: Solicitud inexistente }
+  /{uuid}/adjuntos:
+    parameters:
+      - { in: path, name: uuid, required: true, schema: { type: string, format: uuid } }
+    post:
+      summary: Registra metadatos de un adjunto
+      description: >
+        El binario se sube al servicio de almacenamiento; este servicio solo guarda la referencia.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fileUuid, nombreOriginal, mimeType, tamanoBytes]
+              properties:
+                fileUuid: { type: string, format: uuid }
+                nombreOriginal: { type: string, maxLength: 255 }
+                mimeType: { type: string, maxLength: 100 }
+                tamanoBytes: { type: integer, minimum: 1, maximum: 104857600 }
+      responses:
+        '201':
+          description: Adjunto registrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: '#/components/schemas/Adjunto' }
+        '400': { description: Datos inválidos }
+        '403': { description: No es el solicitante ni personal }
+        '404': { description: Solicitud inexistente }
+  /{uuid}/estado:
+    parameters:
+      - { in: path, name: uuid, required: true, schema: { type: string, format: uuid } }
+    patch:
+      summary: Cambia el estado de una solicitud (STAFF o ADMIN)
+      description: >
+        Transiciones permitidas: pending→in_review, in_review→approved|rejected, approved→closed,
+        rejected→closed. Excepción: si el tipo no requiere aprobación, pending→approved.
+        Al cerrar (closed) se fija fechaResolucion. Cada cambio queda en request_audit_trail.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [estado]
+              properties:
+                estado: { type: string, enum: [pending, in_review, approved, rejected, closed] }
+                comentario: { type: string, maxLength: 2000, nullable: true }
+                asignadoUuid: { type: string, format: uuid, nullable: true }
+      responses:
+        '200':
+          description: Solicitud actualizada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: '#/components/schemas/Solicitud' }
+        '400': { description: Datos inválidos }
+        '403': { description: Rol insuficiente }
+        '404': { description: Solicitud inexistente }
+        '409': { description: Transición de estado no permitida }
