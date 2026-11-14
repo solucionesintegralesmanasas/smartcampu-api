@@ -1,4 +1,5 @@
 const domainTypes = require('./src/domain.types');
+const eventEnvelope = require('./src/event.envelope');
 const eventTypes = require('./src/event.types');
 const userTypes = require('./src/user.types');
 
@@ -32,6 +33,8 @@ module.exports = {
   EVENT_TYPES: eventTypes.EVENT_TYPES,
   EVENT_QUEUES: eventTypes.EVENT_QUEUES,
   EVENT_REGISTRY: eventTypes.EVENT_REGISTRY,
+  ENVELOPE_VERSION: eventEnvelope.ENVELOPE_VERSION,
+  createEventEnvelope: eventEnvelope.createEventEnvelope,
 
   // Elasticsearch Types
   ...require('./src/elasticsearch.types'),
