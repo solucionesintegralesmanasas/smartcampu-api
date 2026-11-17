@@ -1,0 +1,76 @@
+# NOTA: storage-service usa un driver de disco local (ver
+# apps/storage-service/src/config/storage.js), no S3. Por eso va con
+# replicas: 1 y un PVC ReadWriteOnce — con más de un réplica, cada pod
+# vería solo los archivos que él mismo escribió. Para escalar de verdad
+# habría que migrar el driver a un backend compatible con S3.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: storage-uploads
+  namespace: uajs-smart-campus
+spec:
+  accessModes: ['ReadWriteOnce']
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: storage-service
+  namespace: uajs-smart-campus
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: storage-service }
+  template:
+    metadata:
+      labels: { app: storage-service }
+    spec:
+      containers:
+        - name: storage-service
+          image: uajs-base:latest
+          command: ['node', 'apps/storage-service/src/server.js']
+          ports:
+            - containerPort: 3011
+          envFrom:
+            - configMapRef: { name: uajs-shared-config }
+          env:
+            - name: PORT
+              value: '3011'
+            - name: MYSQL_DATABASE
+              value: 'uajs_storage'
+            - name: MYSQL_PASSWORD
+              valueFrom: { secretKeyRef: { name: uajs-shared-secrets, key: MYSQL_PASSWORD } }
+            - name: SERVICE_AUTH_TOKEN
+              valueFrom: { secretKeyRef: { name: uajs-shared-secrets, key: SERVICE_AUTH_TOKEN } }
+            - name: STORAGE_PATH
+              value: '/app/apps/storage-service/uploads'
+          volumeMounts:
+            - name: uploads
+              mountPath: /app/apps/storage-service/uploads
+          readinessProbe:
+            httpGet: { path: /api/v1/storage/health, port: 3011 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /api/v1/storage/health, port: 3011 }
+            initialDelaySeconds: 15
+            periodSeconds: 20
+      volumes:
+        - name: uploads
+          persistentVolumeClaim:
+            claimName: storage-uploads
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: storage-service
+  namespace: uajs-smart-campus
+spec:
+  selector: { app: storage-service }
+  ports:
+    - port: 3011
+      targetPort: 3011

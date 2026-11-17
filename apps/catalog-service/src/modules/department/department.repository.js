@@ -97,6 +97,15 @@ class DepartmentRepository {
     );
     return rows[0].total;
   }
+
+  async countActiveCities(departmentId) {
+    const pool = await this.getPool();
+    const rows = await pool.query(
+      'SELECT COUNT(*) AS total FROM cities WHERE state_id = ? AND is_active = 1',
+      [departmentId],
+    );
+    return rows[0].total;
+  }
 }
 
 module.exports = DepartmentRepository;

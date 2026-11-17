@@ -12,6 +12,11 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   JWT_SECRET: z.string().min(32, 'JWT_SECRET debe tener al menos 32 caracteres'),
   CORS_ALLOWED_ORIGINS: z.string().transform((val) => val.split(',').map((s) => s.trim())),
+  // Secreto compartido inyectado en cada request proxiada, para que los
+  // microservicios internos verifiquen que la petición vino del gateway
+  // (y por lo tanto X-User-Id/X-User-Roles son confiables) y no de un
+  // cliente que les habla directo al puerto interno.
+  SERVICE_AUTH_TOKEN: z.string().min(32, 'SERVICE_AUTH_TOKEN debe tener al menos 32 caracteres'),
 
   // Rate Limiting
   RATE_LIMIT_BUCKET_CAPACITY: z.coerce.number().default(100),

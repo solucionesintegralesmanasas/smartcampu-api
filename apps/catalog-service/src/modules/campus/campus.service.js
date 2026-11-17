@@ -1,6 +1,7 @@
 const { esClient } = require('../../config/elasticsearch');
 const { env } = require('../../config/env');
 const { NotFoundError, ConflictError } = require('../../core/exceptions');
+const { safeCacheGet, safeCacheSet, safeCacheInvalidate } = require('../../core/helpers/cache.helper');
 
 const ES_INDEX = 'campuses';
 
@@ -16,14 +17,13 @@ class CampusService {
   }
 
   async getCache(key) {
-    const cached = await this.redisClient.get(key);
-    return cached ? JSON.parse(cached) : null;
+    return safeCacheGet(this.redisClient, key);
   }
 
   async create(campusDto) {
-    const existing = await this.campusRepository.findByName(campusDto.name);
+    const existing = await this.campusRepository.findByName(campusDto.name, campusDto.cityId);
     if (existing) {
-      throw new ConflictError('Campus name already exists');
+      throw new ConflictError('Campus name already exists in this city');
     }
 
     const campus = await this.campusRepository.create(campusDto);
@@ -62,7 +62,7 @@ class CampusService {
 
     const result = await this.campusRepository.findAll({ page, limit });
 
-    await this.redisClient.set(cacheKey, JSON.stringify(result), env.CATALOG_CACHE_TTL);
+    await safeCacheSet(this.redisClient, cacheKey, result, env.CATALOG_CACHE_TTL);
     this.trackListKey(cacheKey);
 
     return result;
@@ -80,7 +80,7 @@ class CampusService {
       throw new NotFoundError('Campus not found');
     }
 
-    await this.redisClient.set(cacheKey, JSON.stringify(campus), env.CATALOG_CACHE_TTL);
+    await safeCacheSet(this.redisClient, cacheKey, campus, env.CATALOG_CACHE_TTL);
 
     return campus;
   }
@@ -94,7 +94,7 @@ class CampusService {
 
     const campuses = await this.campusRepository.findByCityId(cityId);
 
-    await this.redisClient.set(cacheKey, JSON.stringify(campuses), env.CATALOG_CACHE_TTL);
+    await safeCacheSet(this.redisClient, cacheKey, campuses, env.CATALOG_CACHE_TTL);
     this.trackListKey(cacheKey);
 
     return campuses;
@@ -107,9 +107,12 @@ class CampusService {
     }
 
     if (campusDto.name && campusDto.name !== existing.name) {
-      const duplicate = await this.campusRepository.findByName(campusDto.name);
+      const duplicate = await this.campusRepository.findByName(
+        campusDto.name,
+        campusDto.cityId ?? existing.cityId,
+      );
       if (duplicate) {
-        throw new ConflictError('Campus name already exists');
+        throw new ConflictError('Campus name already exists in this city');
       }
     }
 
@@ -180,7 +183,7 @@ class CampusService {
 
   async invalidateCache() {
     const keys = Array.from(this.listKeys);
-    await Promise.all(keys.map((key) => this.redisClient.del(key)));
+    await safeCacheInvalidate(this.redisClient, keys);
     this.listKeys.clear();
   }
 }

@@ -1,0 +1,85 @@
+openapi: 3.0.0
+info:
+  title: Resource Service API
+  version: 1.0.0
+  description: >
+    Recursos físicos reservables del campus (aulas, laboratorios, equipos) y
+    su disponibilidad operativa (horarios semanales + bloqueos excepcionales).
+    No sabe nada de reservas concretas — eso vive en booking-service.
+servers:
+  - url: /api/v1/resources
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200': { description: Service status }
+  /categorias:
+    get:
+      summary: List resource categories
+      responses:
+        '200': { description: Paginated list }
+    post:
+      summary: Create a category (admin/staff only)
+      responses:
+        '201': { description: Created }
+        '409': { description: Code already exists }
+  /categorias/{id}:
+    get: { summary: Get by id, parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: Found } } }
+    put: { summary: Update (admin/staff only), parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: Updated } } }
+    delete: { summary: Delete (admin/staff only, blocked if it has active resources), parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: Deleted }, '409': { description: Has active resources } } }
+  /estados:
+    get:
+      summary: List resource statuses
+      responses:
+        '200': { description: Paginated list }
+    post:
+      summary: Create a status (admin/staff only)
+      responses:
+        '201': { description: Created }
+  /estados/{id}:
+    get: { summary: Get by id, parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: Found } } }
+    put: { summary: Update (admin/staff only), parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: Updated } } }
+    delete: { summary: Delete (admin/staff only, blocked if assigned to active resources), parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: Deleted }, '409': { description: Assigned to active resources } } }
+  /recursos:
+    get:
+      summary: List resources
+      parameters:
+        - { name: categoryId, in: query, schema: { type: integer } }
+        - { name: campusUuid, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Paginated list }
+    post:
+      summary: Create a resource (admin/staff only, requires existing category and status)
+      responses:
+        '201': { description: Created }
+        '404': { description: Category or status not found }
+        '409': { description: Resource code already exists }
+  /recursos/{id}:
+    get: { summary: Get by id, parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: Found } } }
+    put: { summary: Update (admin/staff only), parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: Updated } } }
+    delete: { summary: Deactivate (admin/staff only), parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: Deleted } } }
+  /recursos/{id}/disponibilidad:
+    get:
+      summary: >
+        Check operational availability (status + weekly schedule + blackouts).
+        Reachable by any request that went through the gateway, or directly by
+        booking-service with its own service token.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: date, in: query, required: true, schema: { type: string, format: date } }
+        - { name: startTime, in: query, required: true, schema: { type: string } }
+        - { name: endTime, in: query, required: true, schema: { type: string } }
+      responses:
+        '200': { description: 'Availability result: { available: boolean, reason?: string }' }
+  /recursos/{resourceId}/horarios:
+    get: { summary: List weekly schedule slots for a resource, parameters: [{ name: resourceId, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: List } } }
+    post: { summary: Add a schedule slot (admin/staff only, one per day of week), parameters: [{ name: resourceId, in: path, required: true, schema: { type: integer } }], responses: { '201': { description: Created }, '409': { description: Slot already exists for that day } } }
+  /recursos/{resourceId}/horarios/{id}:
+    put: { summary: Update a schedule slot (admin/staff only), responses: { '200': { description: Updated } } }
+    delete: { summary: Remove a schedule slot (admin/staff only), responses: { '200': { description: Deleted } } }
+  /recursos/{resourceId}/bloqueos:
+    get: { summary: List blackout windows for a resource, parameters: [{ name: resourceId, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: List } } }
+    post: { summary: Create a blackout window (admin/staff only), parameters: [{ name: resourceId, in: path, required: true, schema: { type: integer } }], responses: { '201': { description: Created } } }
+  /recursos/{resourceId}/bloqueos/{id}:
+    delete: { summary: Remove a blackout window (admin/staff only), responses: { '200': { description: Deleted } } }

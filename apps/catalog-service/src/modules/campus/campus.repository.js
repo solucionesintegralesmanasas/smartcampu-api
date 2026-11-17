@@ -72,11 +72,11 @@ class CampusRepository {
     return rows;
   }
 
-  async findByName(name) {
+  async findByName(name, cityId) {
     const pool = await this.getPool();
     const rows = await pool.query(
-      'SELECT id_sede AS id, uuid, nombre AS name, direccion AS address, telefono AS phone, id_ciudad AS cityId, activo AS active, created_at, updated_at FROM sedes WHERE nombre = ? AND activo = ?',
-      [name, 1],
+      'SELECT id_sede AS id, uuid, nombre AS name, direccion AS address, telefono AS phone, id_ciudad AS cityId, activo AS active, created_at, updated_at FROM sedes WHERE nombre = ? AND id_ciudad = ? AND activo = ?',
+      [name, cityId, 1],
     );
     return rows[0] || null;
   }

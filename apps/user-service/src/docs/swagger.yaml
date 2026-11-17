@@ -1,0 +1,222 @@
+openapi: 3.0.0
+info:
+  title: User Service API
+  version: 1.0.0
+  description: >
+    Administración de usuarios, roles y permisos (RBAC), y perfil polimórfico.
+    Comparte la base de datos de auth-service (users/persons/roles/permissions).
+servers:
+  - url: /api/v1
+paths:
+  /users/health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: Service status
+  /users:
+    get:
+      summary: List users (admin only)
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+        - name: isActive
+          in: query
+          schema: { type: boolean }
+        - name: role
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Paginated list of users
+        '401':
+          description: Not authenticated
+        '403':
+          description: Missing admin role
+  /users/search:
+    get:
+      summary: Full-text search of users in Elasticsearch (admin only)
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Matching users
+  /users/{id}:
+    get:
+      summary: Get a user by id (admin only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: User found }
+        '404': { description: User not found }
+    put:
+      summary: Update a user's profile fields / active status (admin only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                firstName: { type: string }
+                middleName: { type: string }
+                lastName: { type: string }
+                secondLastName: { type: string }
+                phone: { type: string }
+                isActive: { type: boolean }
+      responses:
+        '200': { description: User updated }
+    delete:
+      summary: Deactivate a user (soft delete, admin only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: User deactivated }
+  /roles:
+    get:
+      summary: List roles (admin only)
+      responses:
+        '200': { description: Paginated list of roles }
+    post:
+      summary: Create a role (admin only)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                description: { type: string }
+      responses:
+        '201': { description: Role created }
+        '409': { description: Role name already exists }
+  /roles/{id}:
+    get:
+      summary: Get a role by id (admin only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Role found }
+    put:
+      summary: Update a role (admin only, cannot rename system roles)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Role updated }
+        '403': { description: Cannot rename a system role }
+    delete:
+      summary: Delete a role (admin only, blocked for system roles or roles in use)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Role deleted }
+        '403': { description: Cannot delete a system role }
+        '409': { description: Role is assigned to active users }
+  /roles/{id}/permissions:
+    get:
+      summary: List a role's permissions (admin only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: List of permissions }
+    post:
+      summary: Assign a permission to a role (admin only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                permissionId: { type: integer }
+      responses:
+        '200': { description: Updated list of permissions }
+  /roles/{id}/permissions/{permissionId}:
+    delete:
+      summary: Revoke a permission from a role (admin only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: permissionId, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Updated list of permissions }
+  /permissions:
+    get:
+      summary: List permissions (admin only)
+      parameters:
+        - name: module
+          in: query
+          schema: { type: string }
+      responses:
+        '200': { description: Paginated list of permissions }
+    post:
+      summary: Create a permission (admin only)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                module: { type: string }
+                resource: { type: string }
+                action: { type: string, enum: [create, read, update, delete, approve, export] }
+                description: { type: string }
+      responses:
+        '201': { description: Permission created }
+  /permissions/{id}:
+    get:
+      summary: Get a permission by id (admin only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Permission found }
+    put:
+      summary: Update a permission's description (admin only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Permission updated }
+    delete:
+      summary: Delete a permission (admin only, blocked if assigned to roles)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Permission deleted }
+        '409': { description: Permission is assigned to roles }
+  /profile:
+    get:
+      summary: Get my own profile (polymorphic: includes estudiante/docente data when available)
+      responses:
+        '200': { description: Own profile }
+        '401': { description: Not authenticated }
+    put:
+      summary: Update my own profile (basic fields only, not roles or active status)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                firstName: { type: string }
+                middleName: { type: string }
+                lastName: { type: string }
+                secondLastName: { type: string }
+                phone: { type: string }
+      responses:
+        '200': { description: Updated profile }
+  /profile/{userId}:
+    get:
+      summary: Get another user's profile (admin only)
+      parameters:
+        - { name: userId, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Profile found }
+        '403': { description: Missing admin role }

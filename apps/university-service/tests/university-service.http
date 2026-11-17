@@ -1,0 +1,354 @@
+### ============================================
+### UNIVERSITY SERVICE - Pruebas de endpoints (vía API Gateway)
+### Puerto interno: 3004 | Prefijo gateway: /api/v1/universidad -> /api/v1/university
+### Base de datos: uajs_academic (campuses, companies, persons, faculties, programs, students, teachers)
+### Ejecutar en ORDEN: cada creación usa la respuesta de la anterior.
+### ============================================
+
+@gateway = http://localhost:3000
+@direct = http://localhost:3004
+@contentType = application/json
+@adminEmail = evidencia.qa@uajs.edu
+@adminPassword = EvidenciaQA.2026
+@cityUuid = PEGA_UUID_DE_BOGOTA
+@userUuid = PEGA_UUID_DEL_USUARIO_ESTUDIANTE
+@serviceToken = uajs_service_token_2024_change_me_in_prod
+
+### ============================================
+### PREREQUISITOS
+### 1) SUPERADMIN asignado (ver user-service.http) y LOGIN ejecutado.
+### 2) UUID de Bogotá (catálogo):
+###    SELECT uuid FROM uajs_catalog.cities WHERE dane_code = '11001';
+### ============================================
+
+### HEALTH CHECK
+GET {{direct}}/api/v1/university/health
+
+### LOGIN
+# @name login
+POST {{gateway}}/api/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+### ============================================
+### SEDES  (uajs_academic.campuses)
+### ============================================
+
+### Crear sede -> 201
+# @name createSede
+POST {{gateway}}/api/v1/universidad/sedes
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "name": "Sede Pruebas Norte",
+  "address": "Calle 100 # 10-20",
+  "phone": "6013000000",
+  "email": "norte@uajs.edu.co",
+  "cityUuid": "{{cityUuid}}",
+  "cityName": "Bogotá D.C.",
+  "stateName": "Bogotá D.C.",
+  "isMain": false
+}
+
+### Listar sedes (cualquier usuario autenticado) -> 200
+GET {{gateway}}/api/v1/universidad/sedes?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Obtener sede -> 200
+GET {{gateway}}/api/v1/universidad/sedes/{{createSede.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Actualizar sede -> 200
+PUT {{gateway}}/api/v1/universidad/sedes/{{createSede.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "name": "Sede Pruebas Norte Actualizada",
+  "phone": "6013000001"
+}
+
+### ============================================
+### EMPRESAS  (uajs_academic.companies)
+### ============================================
+
+### Crear empresa (convenio) -> 201
+# @name createEmpresa
+POST {{gateway}}/api/v1/universidad/empresas
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "legalName": "Empresa Prueba SAS",
+  "tradeName": "EPSAS",
+  "taxId": "900555111",
+  "address": "Carrera 1 # 2-3",
+  "phone": "6011234567",
+  "email": "contacto@epsas.co",
+  "cityName": "Bogotá D.C."
+}
+
+### NIT duplicado -> 409 (UK uq_companies_tax_id)
+POST {{gateway}}/api/v1/universidad/empresas
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "legalName": "Otra Empresa",
+  "taxId": "900555111"
+}
+
+### Listar empresas -> 200
+GET {{gateway}}/api/v1/universidad/empresas?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Actualizar empresa -> 200
+PUT {{gateway}}/api/v1/universidad/empresas/{{createEmpresa.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "tradeName": "EPSAS Actualizada"
+}
+
+### ============================================
+### TERCEROS / PERSONAS  (uajs_academic.persons)
+### ============================================
+
+### Crear persona (estudiante) -> 201
+# @name createTerceroEstudiante
+POST {{gateway}}/api/v1/universidad/terceros
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "documentTypeCode": "CC",
+  "documentNumber": "1098765432",
+  "firstName": "Laura",
+  "lastName": "Gómez",
+  "email": "laura.gomez@uajs.edu.co",
+  "phone": "3001112233"
+}
+
+### Crear persona (docente) -> 201
+# @name createTerceroDocente
+POST {{gateway}}/api/v1/universidad/terceros
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "documentTypeCode": "CC",
+  "documentNumber": "79123456",
+  "firstName": "Carlos",
+  "lastName": "Ruiz"
+}
+
+### Documento duplicado -> 409 (UK uq_persons_document)
+POST {{gateway}}/api/v1/universidad/terceros
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "documentTypeCode": "CC",
+  "documentNumber": "1098765432",
+  "firstName": "Duplicado",
+  "lastName": "Prueba"
+}
+
+### Listar personas -> 200
+GET {{gateway}}/api/v1/universidad/terceros?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Actualizar persona -> 200
+PUT {{gateway}}/api/v1/universidad/terceros/{{createTerceroEstudiante.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "phone": "3009998877"
+}
+
+### ============================================
+### FACULTADES  (uajs_academic.faculties -> campuses)
+### ============================================
+
+### Crear facultad en la sede de prueba -> 201
+# @name createFacultad
+POST {{gateway}}/api/v1/universidad/facultades
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "campusId": {{createSede.response.body.data.id}},
+  "code": "FPR",
+  "name": "Facultad de Pruebas",
+  "deanName": "Decano de Prueba",
+  "email": "fpr@uajs.edu.co"
+}
+
+### Listar facultades de la sede -> 200
+GET {{gateway}}/api/v1/universidad/facultades?campusId={{createSede.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Actualizar facultad -> 200
+PUT {{gateway}}/api/v1/universidad/facultades/{{createFacultad.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "deanName": "Decana de Prueba"
+}
+
+### ============================================
+### PROGRAMAS  (uajs_academic.programs -> faculties)
+### level: undergraduate | specialization | masters | doctorate | technologist | technician
+### ============================================
+
+### Crear programa -> 201
+# @name createPrograma
+POST {{gateway}}/api/v1/universidad/programas
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "facultyId": {{createFacultad.response.body.data.id}},
+  "code": "PRU01",
+  "name": "Programa de Pruebas",
+  "level": "undergraduate",
+  "durationSemesters": 10,
+  "totalCredits": 160,
+  "sniesCode": "99999"
+}
+
+### Nivel inválido -> 400
+POST {{gateway}}/api/v1/universidad/programas
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "facultyId": {{createFacultad.response.body.data.id}},
+  "code": "PRU02",
+  "name": "Programa Inválido",
+  "level": "bachillerato",
+  "durationSemesters": 6,
+  "totalCredits": 90
+}
+
+### Listar programas de la facultad -> 200
+GET {{gateway}}/api/v1/universidad/programas?facultyId={{createFacultad.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ============================================
+### ESTUDIANTES  (uajs_academic.students -> persons, programs)
+### person_id es UNIQUE: una persona tiene un solo registro de estudiante.
+### ============================================
+
+### Matricular estudiante -> 201
+# @name createEstudiante
+POST {{gateway}}/api/v1/universidad/estudiantes
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "personId": {{createTerceroEstudiante.response.body.data.id}},
+  "programId": {{createPrograma.response.body.data.id}},
+  "studentCode": "E2026QA001",
+  "enrollmentDate": "2026-08-01",
+  "currentSemester": 1
+}
+
+### Segunda matrícula de la misma persona -> 409 (UK uq_students_person)
+POST {{gateway}}/api/v1/universidad/estudiantes
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "personId": {{createTerceroEstudiante.response.body.data.id}},
+  "programId": {{createPrograma.response.body.data.id}},
+  "studentCode": "E2026QA002",
+  "enrollmentDate": "2026-08-01"
+}
+
+### Listar estudiantes del programa -> 200
+GET {{gateway}}/api/v1/universidad/estudiantes?programId={{createPrograma.response.body.data.id}}&status=active
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Obtener estudiante -> 200
+GET {{gateway}}/api/v1/universidad/estudiantes/{{createEstudiante.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Actualizar estudiante -> 200
+PUT {{gateway}}/api/v1/universidad/estudiantes/{{createEstudiante.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "currentSemester": 2,
+  "gpa": 4.25,
+  "status": "active"
+}
+
+### Consulta servicio a servicio (X-Service-Token; no pasa por el gateway) -> 200
+GET {{direct}}/api/v1/university/estudiantes/by-user/{{userUuid}}
+X-Service-Token: {{serviceToken}}
+
+### ============================================
+### DOCENTES  (uajs_academic.teachers -> persons, faculties)
+### ============================================
+
+### Vincular docente -> 201
+# @name createDocente
+POST {{gateway}}/api/v1/universidad/docentes
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "personId": {{createTerceroDocente.response.body.data.id}},
+  "facultyId": {{createFacultad.response.body.data.id}},
+  "teacherCode": "D2026QA001",
+  "contractType": "full_time",
+  "hireDate": "2020-02-01",
+  "academicDegree": "Magíster en Ingeniería"
+}
+
+### Actualizar estado del docente -> 200
+PUT {{gateway}}/api/v1/universidad/docentes/{{createDocente.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "status": "active"
+}
+
+### ============================================
+### LIMPIEZA (orden inverso por dependencias de la BD)
+### docente -> estudiante -> programa -> facultad -> empresa -> sede
+### ============================================
+DELETE {{gateway}}/api/v1/universidad/docentes/{{createDocente.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+DELETE {{gateway}}/api/v1/universidad/estudiantes/{{createEstudiante.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+DELETE {{gateway}}/api/v1/universidad/programas/{{createPrograma.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+DELETE {{gateway}}/api/v1/universidad/facultades/{{createFacultad.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+DELETE {{gateway}}/api/v1/universidad/empresas/{{createEmpresa.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+DELETE {{gateway}}/api/v1/universidad/sedes/{{createSede.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ============================================
+### VERIFICACIÓN EN BD
+### SELECT id, name, is_active FROM uajs_academic.campuses ORDER BY id DESC LIMIT 3;
+### SELECT person_id, student_code, status FROM uajs_academic.students ORDER BY id DESC LIMIT 3;
+### ============================================

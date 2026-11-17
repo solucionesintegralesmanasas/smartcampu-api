@@ -1,0 +1,67 @@
+openapi: 3.0.0
+info:
+  title: Event Service API
+  version: 1.0.0
+  description: >
+    Eventos universitarios (académicos, culturales, deportivos, talleres) con
+    inscripción, control de capacidad y check-in de asistencia.
+    Flujo: draft -> published -> ongoing -> completed, o cancelled desde
+    cualquiera de los tres primeros.
+servers:
+  - url: /api/v1/events
+paths:
+  /health:
+    get: { summary: Health check, responses: { '200': { description: Service status } } }
+  /categorias:
+    get: { summary: List event categories, responses: { '200': { description: Paginated list } } }
+    post: { summary: Create a category (admin/staff only), responses: { '201': { description: Created } } }
+  /categorias/{id}:
+    get: { summary: Get by id, responses: { '200': { description: Found } } }
+    put: { summary: Update (admin/staff only), responses: { '200': { description: Updated } } }
+    delete: { summary: Delete (admin/staff only, blocked if it has active events), responses: { '200': { description: Deleted }, '409': { description: Has active events } } }
+  /estados:
+    get: { summary: List event statuses, responses: { '200': { description: Paginated list } } }
+    post: { summary: Create a status (admin/staff only), responses: { '201': { description: Created } } }
+  /estados/{id}:
+    get: { summary: Get by id, responses: { '200': { description: Found } } }
+    delete: { summary: Delete (admin/staff only, blocked if assigned to active events), responses: { '200': { description: Deleted }, '409': { description: Assigned to active events } } }
+  /eventos:
+    get:
+      summary: List events
+      parameters:
+        - { name: categoryId, in: query, schema: { type: integer } }
+        - { name: statusId, in: query, schema: { type: integer } }
+        - { name: organizerUuid, in: query, schema: { type: string, format: uuid } }
+      responses: { '200': { description: Paginated list } }
+    post:
+      summary: Create an event (any authenticated user becomes its organizer). Starts in 'draft'.
+      responses: { '201': { description: Created }, '404': { description: Category not found } }
+  /eventos/{id}:
+    get: { summary: Get an event by id, responses: { '200': { description: Found } } }
+    put: { summary: Update (organizer or admin/staff only), responses: { '200': { description: Updated }, '403': { description: Not the organizer } } }
+    delete: { summary: Delete (organizer or admin/staff only), responses: { '200': { description: Deleted } } }
+  /eventos/{id}/publicar:
+    post: { summary: Publish a draft event (organizer or admin/staff only), responses: { '200': { description: Published }, '409': { description: Not in draft } } }
+  /eventos/{id}/iniciar:
+    post: { summary: Mark a published event as ongoing, responses: { '200': { description: Ongoing }, '409': { description: Not published } } }
+  /eventos/{id}/completar:
+    post: { summary: Mark an ongoing event as completed, responses: { '200': { description: Completed }, '409': { description: Not ongoing } } }
+  /eventos/{id}/cancelar:
+    post: { summary: Cancel a draft/published/ongoing event, responses: { '200': { description: Cancelled } } }
+  /eventos/{eventId}/inscripciones:
+    post:
+      summary: >
+        Register for the event (only while published, before the deadline).
+        Auto-assigns 'confirmed' or 'waitlisted' based on maxCapacity.
+      responses: { '201': { description: Registered }, '409': { description: Not open for registration, deadline passed, or already registered } }
+    get: { summary: List all registrations for the event (admin/staff only), responses: { '200': { description: List } } }
+  /eventos/{eventId}/inscripciones/mia:
+    get: { summary: Get my own registration status for this event, responses: { '200': { description: Found }, '404': { description: Not registered } } }
+  /eventos/{eventId}/inscripciones/cancelar:
+    post:
+      summary: >
+        Cancel my own registration. If it was confirmed, automatically
+        promotes the oldest waitlisted registrant to confirmed.
+      responses: { '200': { description: Cancelled } }
+  /eventos/{eventId}/inscripciones/{id}/check-in:
+    post: { summary: Check in a confirmed attendee (admin/staff only), responses: { '200': { description: Checked in }, '409': { description: Not confirmed } } }

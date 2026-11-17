@@ -1,6 +1,8 @@
 ### Variables - Cambia el host según tu entorno
 @base = http://localhost:3001
 @contentType = application/json
+@email = evidencia.qa@uajs.edu
+@password = EvidenciaQA.2026
 
 ### ============================================
 ### HEALTH CHECK
@@ -22,8 +24,8 @@ POST {{base}}/api/v1/auth/register
 Content-Type: {{contentType}}
 
 {
-  "email": "mdarwin1992@hotmail.com",
-  "password": "NuevaPassword.2026",
+  "email": "{{email}}",
+  "password": "{{password}}",
   "firstName": "Darwin",
   "lastName": "Montes",
   "documentTypeCode": "CC",
@@ -40,8 +42,8 @@ POST {{base}}/api/v1/auth/login
 Content-Type: {{contentType}}
 
 {
-  "email": "mdarwin1992@hotmail.com",
-  "password": "NuevaPassword.2026"
+  "email": "{{email}}",
+  "password": "{{password}}"
 }
 
 ### ============================================
@@ -49,6 +51,7 @@ Content-Type: {{contentType}}
 ### Usa el refreshToken devuelto por LOGIN automáticamente.
 ### ============================================
 
+# @name refresh
 POST {{base}}/api/v1/auth/refresh
 Content-Type: {{contentType}}
 
@@ -59,13 +62,16 @@ Content-Type: {{contentType}}
 ### ============================================
 ### LOGOUT (CERRAR SESIÓN)
 ### Invalida el refreshToken en la tabla `refresh_tokens`.
+### IMPORTANTE: REFRESH rota el token (revoca el de LOGIN), por eso el logout
+### usa el refreshToken devuelto por REFRESH. Con el de LOGIN respondería 401 y
+### revocaría toda la familia de tokens (detección de reuso).
 ### ============================================
 
 POST {{base}}/api/v1/auth/logout
 Content-Type: {{contentType}}
 
 {
-  "refreshToken": "{{login.response.body.data.refreshToken}}"
+  "refreshToken": "{{refresh.response.body.data.refreshToken}}"
 }
 
 ### ============================================
@@ -76,7 +82,7 @@ POST {{base}}/api/v1/auth/password-reset
 Content-Type: {{contentType}}
 
 {
-  "email": "mdarwin1992@hotmail.com"
+  "email": "{{email}}"
 }
 
 ### ============================================
@@ -89,5 +95,5 @@ Content-Type: {{contentType}}
 
 {
   "token": "PEGA_AQUI_EL_TOKEN_DE_RESET",
-  "password": "NuevaPassword.2026"
+  "password": "{{password}}"
 }

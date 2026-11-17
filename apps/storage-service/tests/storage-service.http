@@ -1,0 +1,121 @@
+### ============================================
+### STORAGE SERVICE - Pruebas de endpoints (vía API Gateway)
+### Puerto interno: 3011 | Prefijo gateway: /api/v1/archivos -> /api/v1/storage
+### Base de datos: uajs_storage (files). El binario se guarda en disco (STORAGE_DRIVER=local).
+### ============================================
+
+@gateway = http://localhost:3000
+@direct = http://localhost:3011
+@contentType = application/json
+@adminEmail = evidencia.qa@uajs.edu
+@adminPassword = EvidenciaQA.2026
+@fileId = 1
+
+### ============================================
+### PREREQUISITOS
+### 1) SUPERADMIN asignado (ver user-service.http) y LOGIN ejecutado.
+### 2) Los archivos subidos aquí se adjuntan después en request-service.http y
+###    pqrs-service.http. Usar como fileId el id de la respuesta de la subida.
+### ============================================
+
+### HEALTH CHECK
+GET {{direct}}/api/v1/storage/health
+
+### LOGIN
+# @name login
+POST {{gateway}}/api/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+### ============================================
+### SUBIR ARCHIVO  (multipart/form-data)
+### Campo "file" obligatorio. ownerType: pqrs | solicitud | evento | perfil (opcional).
+### metadata: JSON serializado como texto (se parsea en el servidor).
+### ============================================
+
+### Subir archivo de prueba -> 201
+# @name uploadArchivo
+POST {{gateway}}/api/v1/archivos/archivos
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: multipart/form-data; boundary=----UajsQaBoundary
+
+------UajsQaBoundary
+Content-Disposition: form-data; name="file"; filename="prueba-qa.pdf"
+Content-Type: application/pdf
+
+Contenido de prueba para el módulo de archivos.
+------UajsQaBoundary
+Content-Disposition: form-data; name="ownerType"
+
+solicitud
+------UajsQaBoundary
+Content-Disposition: form-data; name="metadata"
+
+{"origen": "storage-service.http"}
+------UajsQaBoundary--
+
+### ownerType fuera del enum -> 400
+POST {{gateway}}/api/v1/archivos/archivos
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: multipart/form-data; boundary=----UajsQaBoundary
+
+------UajsQaBoundary
+Content-Disposition: form-data; name="file"; filename="malo.txt"
+Content-Type: text/plain
+
+Archivo con propietario inválido.
+------UajsQaBoundary
+Content-Disposition: form-data; name="ownerType"
+
+desconocido
+------UajsQaBoundary--
+
+### metadata con JSON inválido -> 400 (metadata must be valid JSON)
+POST {{gateway}}/api/v1/archivos/archivos
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: multipart/form-data; boundary=----UajsQaBoundary
+
+------UajsQaBoundary
+Content-Disposition: form-data; name="file"; filename="json-malo.txt"
+Content-Type: text/plain
+
+Archivo con metadata inválida.
+------UajsQaBoundary
+Content-Disposition: form-data; name="metadata"
+
+{origen: sin comillas}
+------UajsQaBoundary--
+
+### ============================================
+### CONSULTAS
+### ============================================
+
+### Listar archivos (filtro por propietario) -> 200
+GET {{gateway}}/api/v1/archivos/archivos?page=1&limit=10&ownerType=solicitud
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Metadata de un archivo -> 200
+GET {{gateway}}/api/v1/archivos/archivos/{{fileId}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Descargar contenido -> 200 (Content-Type original)
+GET {{gateway}}/api/v1/archivos/archivos/{{fileId}}/download
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Sin token -> 401
+GET {{gateway}}/api/v1/archivos/archivos
+
+### ============================================
+### ELIMINAR  (soft delete: is_active = 0)
+### ============================================
+DELETE {{gateway}}/api/v1/archivos/archivos/{{fileId}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ============================================
+### VERIFICACIÓN EN BD
+### SELECT id, uuid, original_name, mime_type, size_bytes, checksum_sha256, owner_type, is_active FROM uajs_storage.files ORDER BY id DESC LIMIT 5;
+### ============================================

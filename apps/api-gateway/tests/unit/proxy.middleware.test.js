@@ -40,7 +40,9 @@ describe('Proxy Middleware', () => {
     // Simula requestId + auth previos al proxy
     app.use((req, res, next) => {
       req.requestId = 'req-test-123';
-      req.user = { id: 99, roles: ['ADMIN', 'ESTUDIANTE'] };
+      req.user = {
+        id: 99, uuid: 'user-uuid-99', nombre: 'José Pérez', roles: ['ADMIN', 'ESTUDIANTE'],
+      };
       next();
     });
     setupProxy(app);
@@ -51,15 +53,17 @@ describe('Proxy Middleware', () => {
     delete process.env.SERVICE_USER_URL;
   });
 
-  it('debe ruteo al servicio correcto conservando el path /api/v1', async () => {
+  it('reescribe el prefijo público /api/v1/usuarios al interno /api/v1/users del servicio', async () => {
     await request(app).get('/api/v1/usuarios/42');
     expect(capturedRequest).not.toBeNull();
-    expect(capturedRequest.url).toBe('/api/v1/usuarios/42');
+    expect(capturedRequest.url).toBe('/api/v1/users/42');
   });
 
-  it('debe inyectar los headers X-User-Id, X-User-Roles y X-Request-Id', async () => {
+  it('debe inyectar los headers X-User-Id, X-User-Uuid, X-User-Name, X-User-Roles y X-Request-Id', async () => {
     await request(app).get('/api/v1/usuarios');
     expect(capturedRequest.headers['x-user-id']).toBe('99');
+    expect(capturedRequest.headers['x-user-uuid']).toBe('user-uuid-99');
+    expect(decodeURIComponent(capturedRequest.headers['x-user-name'])).toBe('José Pérez');
     expect(capturedRequest.headers['x-user-roles']).toBe('ADMIN,ESTUDIANTE');
     expect(capturedRequest.headers['x-request-id']).toBe('req-test-123');
   });

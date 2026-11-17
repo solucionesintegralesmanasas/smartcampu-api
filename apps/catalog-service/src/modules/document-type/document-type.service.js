@@ -1,6 +1,7 @@
 const { esClient } = require('../../config/elasticsearch');
 const { env } = require('../../config/env');
 const { NotFoundError, ConflictError } = require('../../core/exceptions');
+const { safeCacheGet, safeCacheSet, safeCacheInvalidate } = require('../../core/helpers/cache.helper');
 
 const ES_INDEX = 'document-types';
 
@@ -16,8 +17,7 @@ class DocumentTypeService {
   }
 
   async getCache(key) {
-    const cached = await this.redisClient.get(key);
-    return cached ? JSON.parse(cached) : null;
+    return safeCacheGet(this.redisClient, key);
   }
 
   async create(documentTypeDto) {
@@ -69,7 +69,7 @@ class DocumentTypeService {
 
     const result = await this.documentTypeRepository.findAll({ page, limit });
 
-    await this.redisClient.set(cacheKey, JSON.stringify(result), env.CATALOG_CACHE_TTL);
+    await safeCacheSet(this.redisClient, cacheKey, result, env.CATALOG_CACHE_TTL);
     this.trackListKey(cacheKey);
 
     return result;
@@ -87,7 +87,7 @@ class DocumentTypeService {
       throw new NotFoundError('Document type not found');
     }
 
-    await this.redisClient.set(cacheKey, JSON.stringify(documentType), env.CATALOG_CACHE_TTL);
+    await safeCacheSet(this.redisClient, cacheKey, documentType, env.CATALOG_CACHE_TTL);
 
     return documentType;
   }
@@ -179,7 +179,7 @@ class DocumentTypeService {
 
   async invalidateCache() {
     const keys = Array.from(this.listKeys);
-    await Promise.all(keys.map((key) => this.redisClient.del(key)));
+    await safeCacheInvalidate(this.redisClient, keys);
     this.listKeys.clear();
   }
 }

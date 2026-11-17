@@ -1,0 +1,282 @@
+### ============================================================================
+### UAJS SMART CAMPUS — COLECCIÓN REST CLIENT · 02 · COMUNICACIÓN ENTRE SERVICIOS
+### ----------------------------------------------------------------------------
+### Estas peticiones NO pasan por el gateway: van directo al puerto interno de
+### cada microservicio, igual que lo hace el código real entre servicios.
+###
+### Mecanismo de confianza (ver identity.middleware.js de cada servicio):
+###   · X-Service-Token  = secreto compartido (SERVICE_AUTH_TOKEN). Sin él, los
+###     headers de identidad se IGNORAN y la petición queda sin req.user (401).
+###   · X-User-Id / X-User-Uuid / X-User-Name / X-User-Roles = identidad del
+###     usuario final que el gateway inyecta al proxear (o el servicio al
+###     llamar a otro servicio en nombre del usuario).
+###   · X-User-Name debe venir URI-encoded (tildes / ñ).
+###
+### Cada caso reproduce una llamada que existe en el código, con la ruta y los
+### headers exactos que usa ese cliente HTTP.
+### ============================================================================
+
+@serviceToken = uajs_service_token_2024_change_me_in_prod
+@badToken = token-invalido
+
+### Identidad del usuario en nombre del cual se hacen las llamadas
+### (id 3 = evidencia.qa@uajs.edu, SUPERADMIN y dueño del archivo 1)
+@svcUserId = 3
+@svcUserUuid = 34ff7d37-cff4-11f1-82bb-86146150ecd2
+@svcUserName = Evidencia%20QA
+@svcRoles = SUPERADMIN
+
+### Puertos internos
+@auth = http://localhost:3001
+@users = http://localhost:3002
+@catalog = http://localhost:3003
+@university = http://localhost:3004
+@resources = http://localhost:3005
+@bookings = http://localhost:3006
+@requests = http://localhost:3007
+@events = http://localhost:3008
+@notifications = http://localhost:3009
+@pqrs = http://localhost:3010
+@storage = http://localhost:3011
+
+@resourceId = 1
+@fileId = 1
+
+
+### ============================================================================
+### C00 · SALUD DE LOS 11 SERVICIOS INTERNOS (sin token: son públicos)
+### ============================================================================
+
+### C00.01 auth-service -> 200
+GET {{auth}}/healthz
+
+### C00.02 user-service -> 200
+GET {{users}}/api/v1/users/health
+
+### C00.03 catalog-service -> 200
+GET {{catalog}}/api/v1/catalog/health
+
+### C00.04 university-service -> 200
+GET {{university}}/api/v1/university/health
+
+### C00.05 resource-service -> 200
+GET {{resources}}/api/v1/resources/health
+
+### C00.06 booking-service -> 200
+GET {{bookings}}/api/v1/bookings/health
+
+### C00.07 request-service -> 200
+GET {{requests}}/api/v1/requests/health
+
+### C00.08 event-service -> 200
+GET {{events}}/api/v1/events/health
+
+### C00.09 notification-service -> 200
+GET {{notifications}}/api/v1/notifications/health
+
+### C00.10 pqrs-service -> 200
+GET {{pqrs}}/api/v1/pqrs/health
+
+### C00.11 storage-service -> 200
+GET {{storage}}/api/v1/storage/health
+
+
+### ============================================================================
+### C01 · booking-service → resource-service
+### Origen: apps/booking-service/src/clients/resource.client.js
+###   getResource()              GET /api/v1/resources/recursos/:id
+###   checkResourceAvailability() GET /api/v1/resources/recursos/:id/disponibilidad
+### Solo lleva X-Service-Token (no reenvía identidad de usuario): resource-service
+### expone esas rutas con requireTrustedService.
+### ============================================================================
+
+### C01.01 getResource(): el recurso debe existir y estar is_active = 1 -> 200
+GET {{resources}}/api/v1/resources/recursos/{{resourceId}}
+X-Service-Token: {{serviceToken}}
+
+### C01.02 checkResourceAvailability(): estado reservable + horario + bloqueo -> 200
+GET {{resources}}/api/v1/resources/recursos/{{resourceId}}/disponibilidad?date=2026-11-17&startTime=09:00&endTime=11:00
+X-Service-Token: {{serviceToken}}
+
+### C01.03 Misma disponibilidad SIN X-Service-Token -> 401
+### Demuestra que la ruta interna está cerrada a llamadas no confiables.
+GET {{resources}}/api/v1/resources/recursos/{{resourceId}}/disponibilidad?date=2026-11-17&startTime=09:00&endTime=11:00
+
+### C01.04 Con X-Service-Token inválido -> 401
+GET {{resources}}/api/v1/resources/recursos/{{resourceId}}/disponibilidad?date=2026-11-17&startTime=09:00&endTime=11:00
+X-Service-Token: {{badToken}}
+
+
+### ============================================================================
+### C02 · request-service → storage-service
+### Origen: apps/request-service/src/clients/storage.client.js (getFile)
+### Reenvía el secreto de servicio Y la identidad del usuario: storage-service
+### exige ser dueño del archivo o ADMIN/STAFF (evita adjuntar archivos ajenos).
+### ============================================================================
+
+### C02.01 Metadata del archivo en nombre de su dueño -> 200
+GET {{storage}}/api/v1/storage/archivos/{{fileId}}
+X-Service-Token: {{serviceToken}}
+X-User-Id: {{svcUserId}}
+X-User-Uuid: {{svcUserUuid}}
+X-User-Name: {{svcUserName}}
+X-User-Roles: {{svcRoles}}
+
+### C02.02 El mismo archivo SIN X-Service-Token -> 401
+### (sin token de servicio los headers X-User-* se ignoran)
+GET {{storage}}/api/v1/storage/archivos/{{fileId}}
+X-User-Id: {{svcUserId}}
+X-User-Uuid: {{svcUserUuid}}
+X-User-Roles: {{svcRoles}}
+
+### C02.03 Con token válido pero como otro usuario sin permisos -> 403
+### (prueba de que la identidad reenviada SÍ se aplica)
+GET {{storage}}/api/v1/storage/archivos/{{fileId}}
+X-Service-Token: {{serviceToken}}
+X-User-Id: 6
+X-User-Uuid: 1028d00d-cff5-11f1-82bb-86146150ecd2
+X-User-Name: Silvana%20Bohorquez
+X-User-Roles: STUDENT
+
+
+### ============================================================================
+### C03 · pqrs-service → storage-service
+### Mismo patrón que C02 (adjuntos de PQRS): metadata del archivo antes de
+### vincularlo, para no confiar en el MIME/tamaño que afirme el cliente.
+### ============================================================================
+
+### C03.01 Metadata del archivo -> 200
+GET {{storage}}/api/v1/storage/archivos/{{fileId}}
+X-Service-Token: {{serviceToken}}
+X-User-Id: {{svcUserId}}
+X-User-Uuid: {{svcUserUuid}}
+X-User-Name: {{svcUserName}}
+X-User-Roles: {{svcRoles}}
+
+
+### ============================================================================
+### C04 · CUALQUIER SERVICIO ← llamada directa con identidad de servicio
+### Prueba que identity.middleware + authz.middleware funcionan sin gateway:
+### con el secreto correcto, X-User-* se convierten en req.user y se aplican
+### los mismos permisos y filtros por dueño que en la ruta pública.
+### ============================================================================
+
+### C04.01 user-service /perfil -> 200 (mismo usuario que los headers)
+GET {{users}}/api/v1/users/perfil
+X-Service-Token: {{serviceToken}}
+X-User-Id: {{svcUserId}}
+X-User-Uuid: {{svcUserUuid}}
+X-User-Name: {{svcUserName}}
+X-User-Roles: {{svcRoles}}
+
+### C04.02 university-service sedes -> 200
+GET {{university}}/api/v1/university/sedes?page=1&limit=5
+X-Service-Token: {{serviceToken}}
+X-User-Id: {{svcUserId}}
+X-User-Uuid: {{svcUserUuid}}
+X-User-Name: {{svcUserName}}
+X-User-Roles: {{svcRoles}}
+
+### C04.03 catalog-service departamentos -> 200
+GET {{catalog}}/api/v1/catalog/departments?page=1&limit=5
+X-Service-Token: {{serviceToken}}
+X-User-Id: {{svcUserId}}
+X-User-Uuid: {{svcUserUuid}}
+X-User-Name: {{svcUserName}}
+X-User-Roles: {{svcRoles}}
+
+### C04.04 booking-service listar reservas -> 200
+GET {{bookings}}/api/v1/bookings/reservas?page=1&limit=5
+X-Service-Token: {{serviceToken}}
+X-User-Id: {{svcUserId}}
+X-User-Uuid: {{svcUserUuid}}
+X-User-Name: {{svcUserName}}
+X-User-Roles: {{svcRoles}}
+
+### C04.05 event-service listar eventos -> 200
+GET {{events}}/api/v1/events/eventos?page=1&limit=5
+X-Service-Token: {{serviceToken}}
+X-User-Id: {{svcUserId}}
+X-User-Uuid: {{svcUserUuid}}
+X-User-Name: {{svcUserName}}
+X-User-Roles: {{svcRoles}}
+
+### C04.06 notification-service listar notificaciones -> 200
+GET {{notifications}}/api/v1/notifications?page=1&limit=5
+X-Service-Token: {{serviceToken}}
+X-User-Id: {{svcUserId}}
+X-User-Uuid: {{svcUserUuid}}
+X-User-Name: {{svcUserName}}
+X-User-Roles: {{svcRoles}}
+
+### C04.07 pqrs-service listar PQRS -> 200
+GET {{pqrs}}/api/v1/pqrs?page=1&limit=5
+X-Service-Token: {{serviceToken}}
+X-User-Id: {{svcUserId}}
+X-User-Uuid: {{svcUserUuid}}
+X-User-Name: {{svcUserName}}
+X-User-Roles: {{svcRoles}}
+
+### C04.08 request-service CREAR solicitud directo -> 201
+### El mismo POST que el gateway proxea, pero sin gateway: prueba que el
+### servicio confía en la identidad solo por el X-Service-Token.
+# @name directSolicitud
+POST {{requests}}/api/v1/requests/solicitudes
+X-Service-Token: {{serviceToken}}
+X-User-Id: {{svcUserId}}
+X-User-Uuid: {{svcUserUuid}}
+X-User-Name: {{svcUserName}}
+X-User-Roles: {{svcRoles}}
+Content-Type: application/json
+
+{
+  "requestTypeId": 1,
+  "title": "Solicitud directa (inter-servicio)",
+  "description": "Creada sin pasar por el API Gateway para probar identity.middleware"
+}
+
+### C04.09 El mismo POST SIN X-Service-Token -> 401
+POST {{requests}}/api/v1/requests/solicitudes
+X-User-Id: {{svcUserId}}
+X-User-Uuid: {{svcUserUuid}}
+X-User-Roles: {{svcRoles}}
+Content-Type: application/json
+
+{
+  "requestTypeId": 1,
+  "title": "Sin token de servicio",
+  "description": "Debe ser rechazada"
+}
+
+### C04.10 El mismo POST con X-Service-Token inválido -> 401
+POST {{requests}}/api/v1/requests/solicitudes
+X-Service-Token: {{badToken}}
+X-User-Id: {{svcUserId}}
+X-User-Uuid: {{svcUserUuid}}
+X-User-Roles: {{svcRoles}}
+Content-Type: application/json
+
+{
+  "requestTypeId": 1,
+  "title": "Token invalido",
+  "description": "Debe ser rechazada"
+}
+
+
+### ============================================================================
+### C05 · COMUNICACIÓN ASÍNCRONA (no es HTTP, se verifica en infraestructura)
+### ----------------------------------------------------------------------------
+### · booking-service, request-service, event-service y pqrs-service publican
+###   eventos de DOMINIO en la cola BullMQ `notification_events` (Redis 6379)
+###   cuando una entidad CAMBIA DE ESTADO (no al crearla).
+### · notification-service es el único consumidor de esa cola y persiste en
+###   uajs_notifications (lo que devuelve C04.06).
+### · Cada servicio además tiene su propia cola de auditoría (booking_events,
+###   request_events, ...) con un único consumidor propio.
+###
+### Verificación:
+###   docker exec uajs-redis redis-cli KEYS "bull:notification_events:*"
+###   docker logs -f uajs-notification
+###   SELECT id, template_id, channel, status, created_at
+###     FROM uajs_notifications.notifications ORDER BY id DESC LIMIT 5;
+### ============================================================================

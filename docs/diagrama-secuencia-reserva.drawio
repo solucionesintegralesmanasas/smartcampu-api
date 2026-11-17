@@ -1,0 +1,146 @@
+<mxfile host="app.diagrams.net" modified="2026-10-24T00:00:00.000Z" agent="opencode" version="24.7.17">
+  <diagram id="sec-reserva" name="Reserva - flujo real">
+    <mxGraphModel dx="1500" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1650" pageHeight="1500" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="&lt;b&gt;Secuencia real: POST /api/v1/reservas/reservas&lt;/b&gt; — creación de una reserva (booking-service)&lt;br&gt;&lt;i&gt;Trazado desde el código en ejecución: gateway → proxy → booking-service → resource-service → MySQL / Elasticsearch&lt;/i&gt;" style="text;html=1;align=left;verticalAlign=middle;fontSize=14;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="30" y="0" width="1340" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="p1" value="&lt;b&gt;Frontend&lt;/b&gt;&lt;br&gt;navegador / Vite :5173" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F4F6;strokeColor=#374151;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="30" y="50" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p2" value="&lt;b&gt;api-gateway&lt;/b&gt;&lt;br&gt;:3000" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#B45309;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="220" y="50" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p3" value="&lt;b&gt;booking-service&lt;/b&gt;&lt;br&gt;:3006" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#1D4ED8;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="410" y="50" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p4" value="&lt;b&gt;resource-service&lt;/b&gt;&lt;br&gt;:3005" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#1D4ED8;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="600" y="50" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p5" value="&lt;b&gt;MySQL&lt;/b&gt;&lt;br&gt;uajs_bookings" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DCFCE7;strokeColor=#15803D;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="790" y="50" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p6" value="&lt;b&gt;MySQL&lt;/b&gt;&lt;br&gt;uajs_resources" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DCFCE7;strokeColor=#15803D;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="980" y="50" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p7" value="&lt;b&gt;Elasticsearch&lt;/b&gt;&lt;br&gt;:9200" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EDE9FE;strokeColor=#6D28D9;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1170" y="50" width="170" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="l1" style="endArrow=none;dashed=1;html=1;strokeColor=#9CA3AF;strokeWidth=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="115" y="110" as="sourcePoint" /><mxPoint x="115" y="1250" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="l2" style="endArrow=none;dashed=1;html=1;strokeColor=#9CA3AF;strokeWidth=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="305" y="110" as="sourcePoint" /><mxPoint x="305" y="1250" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="l3" style="endArrow=none;dashed=1;html=1;strokeColor=#9CA3AF;strokeWidth=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="495" y="110" as="sourcePoint" /><mxPoint x="495" y="1250" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="l4" style="endArrow=none;dashed=1;html=1;strokeColor=#9CA3AF;strokeWidth=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="685" y="110" as="sourcePoint" /><mxPoint x="685" y="1250" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="l5" style="endArrow=none;dashed=1;html=1;strokeColor=#9CA3AF;strokeWidth=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="875" y="110" as="sourcePoint" /><mxPoint x="875" y="1250" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="l6" style="endArrow=none;dashed=1;html=1;strokeColor=#9CA3AF;strokeWidth=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="1065" y="110" as="sourcePoint" /><mxPoint x="1065" y="1250" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="l7" style="endArrow=none;dashed=1;html=1;strokeColor=#9CA3AF;strokeWidth=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="1255" y="110" as="sourcePoint" /><mxPoint x="1255" y="1250" as="targetPoint" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="m01" value="1. POST /api/v1/reservas/reservas&lt;br&gt;Authorization: Bearer &amp;lt;jwt&amp;gt; · JSON de la reserva" style="edgeStyle=none;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#1F2937;fontSize=11;labelBackgroundColor=#FFFFFF;verticalAlign=bottom;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="115" y="165" as="sourcePoint" /><mxPoint x="305" y="165" as="targetPoint" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="n1" value="helmet + CORS + express.json&lt;br&gt;requestId · rate limit (token bucket)&lt;br&gt;&lt;b&gt;jwt.verify(JWT_SECRET)&lt;/b&gt; local — sin llamar a auth-service" style="shape=note;whiteSpace=wrap;html=1;size=12;fillColor=#FFFBEB;strokeColor=#B45309;fontSize=10;align=left;spacingLeft=6;" vertex="1" parent="1">
+          <mxGeometry x="30" y="180" width="245" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="m02" value="2. proxy → POST /api/v1/bookings/reservas&lt;br&gt;X-Service-Token · X-User-Id / Uuid / Roles · X-Request-Id&lt;br&gt;(pathRewrite: /api/v1/reservas → /api/v1/bookings)" style="edgeStyle=none;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#1F2937;fontSize=11;labelBackgroundColor=#FFFFFF;verticalAlign=bottom;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="305" y="265" as="sourcePoint" /><mxPoint x="495" y="265" as="targetPoint" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="n2" value="identityMiddleware (valida X-Service-Token)&lt;br&gt;requireAuth → requireRole(SUPERADMIN | ADMIN | STAFF)&lt;br&gt;Zod: bookingTypeId, resourceId, fechas, endTime &amp;gt; startTime" style="shape=note;whiteSpace=wrap;html=1;size=12;fillColor=#EFF6FF;strokeColor=#1D4ED8;fontSize=10;align=left;spacingLeft=6;" vertex="1" parent="1">
+          <mxGeometry x="330" y="280" width="320" height="55" as="geometry" />
+        </mxCell>
+
+        <mxCell id="m03" value="3. SELECT * FROM booking_types WHERE id = ?" style="edgeStyle=none;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#1F2937;fontSize=11;labelBackgroundColor=#FFFFFF;verticalAlign=bottom;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="495" y="365" as="sourcePoint" /><mxPoint x="875" y="365" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="m04" value="tipo: requires_approval, max_duration_minutes" style="edgeStyle=none;rounded=0;html=1;endArrow=open;endFill=0;dashed=1;strokeWidth=1.2;strokeColor=#6B7280;fontSize=10;labelBackgroundColor=#FFFFFF;verticalAlign=top;fontColor=#374151;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="875" y="410" as="sourcePoint" /><mxPoint x="495" y="410" as="targetPoint" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="m05" value="4. HTTP GET /api/v1/resources/recursos/{id}&lt;br&gt;X-Service-Token (getResource)" style="edgeStyle=none;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#1F2937;fontSize=11;labelBackgroundColor=#FFFFFF;verticalAlign=bottom;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="495" y="465" as="sourcePoint" /><mxPoint x="685" y="465" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="m06" value="SELECT ... FROM resources WHERE id = ? AND is_active = 1" style="edgeStyle=none;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#1F2937;fontSize=10;labelBackgroundColor=#FFFFFF;verticalAlign=bottom;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="685" y="510" as="sourcePoint" /><mxPoint x="1065" y="510" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="m07" value="fila del recurso" style="edgeStyle=none;rounded=0;html=1;endArrow=open;endFill=0;dashed=1;strokeWidth=1.2;strokeColor=#6B7280;fontSize=10;labelBackgroundColor=#FFFFFF;verticalAlign=top;fontColor=#374151;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="1065" y="550" as="sourcePoint" /><mxPoint x="685" y="550" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="m08" value="200 { success, data: { uuid, name, statusId, isActive } }" style="edgeStyle=none;rounded=0;html=1;endArrow=open;endFill=0;dashed=1;strokeWidth=1.2;strokeColor=#6B7280;fontSize=10;labelBackgroundColor=#FFFFFF;verticalAlign=top;fontColor=#374151;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="685" y="590" as="sourcePoint" /><mxPoint x="495" y="590" as="targetPoint" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="m09" value="5. GET /recursos/{id}/disponibilidad?date=&amp;amp;startTime=&amp;amp;endTime=" style="edgeStyle=none;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#1F2937;fontSize=11;labelBackgroundColor=#FFFFFF;verticalAlign=bottom;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="495" y="635" as="sourcePoint" /><mxPoint x="685" y="635" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="m10" value="estado is_bookable · horario del día · bloqueo solapado" style="edgeStyle=none;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#1F2937;fontSize=10;labelBackgroundColor=#FFFFFF;verticalAlign=bottom;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="685" y="680" as="sourcePoint" /><mxPoint x="1065" y="680" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="m11" value="filas" style="edgeStyle=none;rounded=0;html=1;endArrow=open;endFill=0;dashed=1;strokeWidth=1.2;strokeColor=#6B7280;fontSize=10;labelBackgroundColor=#FFFFFF;verticalAlign=top;fontColor=#374151;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="1065" y="720" as="sourcePoint" /><mxPoint x="685" y="720" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="m12" value="200 { available: true } | { available: false, reason }" style="edgeStyle=none;rounded=0;html=1;endArrow=open;endFill=0;dashed=1;strokeWidth=1.2;strokeColor=#6B7280;fontSize=10;labelBackgroundColor=#FFFFFF;verticalAlign=top;fontColor=#374151;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="685" y="760" as="sourcePoint" /><mxPoint x="495" y="760" as="targetPoint" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="m13" value="6. estado inicial (&apos;pending&apos; / &apos;approved&apos;) + detección de solapamiento&lt;br&gt;start_time &amp;lt; fin AND end_time &amp;gt; inicio · status NOT IN (rejected, cancelled)" style="edgeStyle=none;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#1F2937;fontSize=10;labelBackgroundColor=#FFFFFF;verticalAlign=bottom;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="495" y="810" as="sourcePoint" /><mxPoint x="875" y="810" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="m14" value="estado + reserva solapada (o null)" style="edgeStyle=none;rounded=0;html=1;endArrow=open;endFill=0;dashed=1;strokeWidth=1.2;strokeColor=#6B7280;fontSize=10;labelBackgroundColor=#FFFFFF;verticalAlign=top;fontColor=#374151;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="875" y="855" as="sourcePoint" /><mxPoint x="495" y="855" as="targetPoint" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="m15" value="7. INSERT bookings (uuid, reference_number BK-YYYY-XXXXXXXX, status_id,&lt;br&gt;resource_uuid/name y requester_uuid/name como snapshot)&lt;br&gt;INSERT booking_audit_trail (&apos;Solicitud creada&apos;)" style="edgeStyle=none;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#047857;fontSize=10;labelBackgroundColor=#FFFFFF;verticalAlign=bottom;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="495" y="905" as="sourcePoint" /><mxPoint x="875" y="905" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="m16" value="insertId · fila creada" style="edgeStyle=none;rounded=0;html=1;endArrow=open;endFill=0;dashed=1;strokeWidth=1.2;strokeColor=#047857;fontSize=10;labelBackgroundColor=#FFFFFF;verticalAlign=top;fontColor=#065F46;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="875" y="950" as="sourcePoint" /><mxPoint x="495" y="950" as="targetPoint" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="m17" value="8. index &apos;uajs_bookings&apos; (best-effort, no bloquea la respuesta)" style="edgeStyle=none;rounded=0;html=1;endArrow=open;endFill=0;dashed=1;strokeWidth=1.2;strokeColor=#6D28D9;fontSize=10;labelBackgroundColor=#FFFFFF;verticalAlign=bottom;fontColor=#5B21B6;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="495" y="1000" as="sourcePoint" /><mxPoint x="1255" y="1000" as="targetPoint" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="m18" value="9. 201 { success: true, data: { id, referenceNumber, statusId, ... } }" style="edgeStyle=none;rounded=0;html=1;endArrow=open;endFill=0;dashed=1;strokeWidth=1.2;strokeColor=#6B7280;fontSize=11;labelBackgroundColor=#FFFFFF;verticalAlign=top;fontColor=#111827;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="495" y="1050" as="sourcePoint" /><mxPoint x="305" y="1050" as="targetPoint" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="m19" value="10. index &apos;uajs_gateway_logs-YYYY-MM-DD&apos; (async, res.on &apos;finish&apos;)" style="edgeStyle=none;rounded=0;html=1;endArrow=open;endFill=0;dashed=1;strokeWidth=1.2;strokeColor=#6D28D9;fontSize=10;labelBackgroundColor=#FFFFFF;verticalAlign=bottom;fontColor=#5B21B6;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="305" y="1100" as="sourcePoint" /><mxPoint x="1255" y="1100" as="targetPoint" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="m20" value="11. 201 Created (JSON al navegador)" style="edgeStyle=none;rounded=0;html=1;endArrow=open;endFill=0;dashed=1;strokeWidth=1.2;strokeColor=#6B7280;fontSize=11;labelBackgroundColor=#FFFFFF;verticalAlign=top;fontColor=#111827;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="305" y="1145" as="sourcePoint" /><mxPoint x="115" y="1145" as="targetPoint" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="err" value="&lt;b&gt;Ramas de error reales (mismo recorrido)&lt;/b&gt;&lt;br&gt;&lt;b&gt;401&lt;/b&gt; gateway: JWT ausente, inválido o expirado (auth.middleware)&lt;br&gt;&lt;b&gt;429&lt;/b&gt; gateway: token bucket por IP / usuario agotado&lt;br&gt;&lt;b&gt;400&lt;/b&gt; booking-service: Zod (fechas, uuid, endTime ≤ startTime)&lt;br&gt;&lt;b&gt;404&lt;/b&gt; booking-service: tipo de reserva o recurso inexistente / inactivo&lt;br&gt;&lt;b&gt;409&lt;/b&gt; booking-service: { available: false } → &quot;Resource is not available: closed_on_this_day&quot;&lt;br&gt;&lt;b&gt;409&lt;/b&gt; booking-service: solapamiento → &quot;Resource already has a booking for this time range&quot;&lt;br&gt;&lt;b&gt;409&lt;/b&gt; MySQL 1062: UNIQUE uq_bookings_slot (resource_uuid, booking_date, start_time)&lt;br&gt;&lt;b&gt;502 / 503 / 504&lt;/b&gt; gateway: servicio interno caído o timeout (onError del proxy)" style="shape=note;whiteSpace=wrap;html=1;size=14;fillColor=#FEF2F2;strokeColor=#B91C1C;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="30" y="1185" width="700" height="160" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend" value="&lt;b&gt;Notas de fidelidad al código&lt;/b&gt;&lt;br&gt;• En &lt;b&gt;create()&lt;/b&gt; NO se publica evento a notification-service ni se usa Redis: los eventos BullMQ (&lt;i&gt;notification_events&lt;/i&gt;, &lt;i&gt;booking_events&lt;/i&gt;) se disparan solo en las transiciones de estado (aprobar / rechazar / confirmar / completar / cancelar).&lt;br&gt;• &lt;b&gt;auth-service&lt;/b&gt; no interviene en esta petición: el gateway verifica el JWT localmente con JWT_SECRET.&lt;br&gt;• &lt;b&gt;uajs_bookings&lt;/b&gt; y &lt;b&gt;uajs_resources&lt;/b&gt; son bases distintas (database-per-service); la única comunicación cruzada es HTTP.&lt;br&gt;• El gateway y booking-service escriben en Elasticsearch de forma asíncrona / best-effort: si ES está caído, la reserva igual se crea (solo el log se pierde).&lt;br&gt;• Flechas llenas = llamada síncrona que la respuesta espera · flechas punteadas = retorno o escritura asíncrona." style="shape=note;whiteSpace=wrap;html=1;size=14;fillColor=#F0FDF4;strokeColor=#15803D;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="750" y="1185" width="620" height="160" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

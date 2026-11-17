@@ -1,0 +1,28 @@
+# El gateway es el único punto de entrada externo (igual que en
+# docker-compose.yml, donde solo api-gateway expone un puerto pensado
+# para consumo público) — todos los demás Service quedan ClusterIP,
+# alcanzables solo dentro del namespace.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: uajs-ingress
+  namespace: uajs-smart-campus
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: '10m'
+    nginx.ingress.kubernetes.io/ssl-redirect: 'true'
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: ['api.uajs-smart-campus.edu.co']
+      secretName: uajs-tls-cert
+  rules:
+    - host: api.uajs-smart-campus.edu.co
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 3000

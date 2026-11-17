@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_ENV: test
+  MYSQL_HOST: 127.0.0.1
+  MYSQL_PORT: 3306
+  MYSQL_USER: root
+  MYSQL_PASSWORD: root
+  REDIS_HOST: 127.0.0.1
+  REDIS_PORT: 6379
+  ELASTICSEARCH_HOST: 127.0.0.1
+  ELASTICSEARCH_PORT: 9200
+  ELASTICSEARCH_USER: elastic
+  ELASTICSEARCH_PASSWORD: changeme
+  SERVICE_AUTH_TOKEN: ci_service_token_2026_only_for_pipeline_use
+
+jobs:
+  lint:
+    name: Lint (all workspaces)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+
+  test:
+    name: Test (all workspaces)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+      elasticsearch:
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+        env:
+          discovery.type: single-node
+          xpack.security.enabled: 'true'
+          ELASTIC_PASSWORD: changeme
+        ports:
+          - 9200:9200
+        options: >-
+          --health-cmd="curl -sf -u elastic:changeme http://localhost:9200/_cluster/health || exit 1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+
+      # Cada migración es autónoma (CREATE DATABASE IF NOT EXISTS + USE),
+      # igual que en infrastructure/docker/init/init-databases.sh.
+      - name: Run database migrations
+        run: |
+          for migration in scripts/migrations/ms-*_001_init.sql; do
+            echo "Applying $migration"
+            mysql -h 127.0.0.1 -uroot -proot < "$migration"
+          done
+
+      # Los seeds de catálogos/estados son necesarios para que los flujos de
+      # creación (POST /reservas, /solicitudes, /eventos, /pqrs) no fallen
+      # con 404 por falta de un estado inicial 'pending'/'draft'.
+      - name: Run seeds
+        run: |
+          for seed in scripts/seed/ms-auth_001_seed.sql scripts/seed/ms-catalog_001_seed.sql scripts/seed/ms-academic_001_seed.sql scripts/seed/ms-bookings_001_seed.sql scripts/seed/ms-requests_001_seed.sql scripts/seed/ms-events_001_seed.sql scripts/seed/ms-pqrs_001_seed.sql scripts/seed/ms-resources_001_seed.sql; do
+            echo "Applying $seed"
+            mysql -h 127.0.0.1 -uroot -proot < "$seed"
+          done
+
+      - name: Run tests (all workspaces via Turborepo)
+        run: npm run test

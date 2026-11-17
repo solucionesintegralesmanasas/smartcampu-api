@@ -1,0 +1,83 @@
+openapi: 3.0.0
+info:
+  title: Request Service API
+  version: 1.0.0
+  description: >
+    Mesa de servicio: certificados, constancias, cambios de matrícula,
+    apelaciones y peticiones generales. Flujo: pending -> in_review ->
+    approved/rejected -> closed, con comentarios en hilo, adjuntos validados
+    contra storage-service, y auditoría inmutable de cada transición.
+servers:
+  - url: /api/v1/requests
+paths:
+  /health:
+    get: { summary: Health check, responses: { '200': { description: Service status } } }
+  /categorias:
+    get: { summary: List categories, responses: { '200': { description: Paginated list } } }
+    post: { summary: Create a category (admin/staff only), responses: { '201': { description: Created }, '409': { description: Code already exists } } }
+  /categorias/{id}:
+    get: { summary: Get by id, parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: Found } } }
+    put: { summary: Update (admin/staff only), responses: { '200': { description: Updated } } }
+    delete: { summary: Delete (admin/staff only, blocked if it has active request types), responses: { '200': { description: Deleted }, '409': { description: Has active types } } }
+  /tipos:
+    get:
+      summary: List request types
+      parameters: [{ name: categoryId, in: query, schema: { type: integer } }]
+      responses: { '200': { description: Paginated list } }
+    post: { summary: Create a request type (admin/staff only, requires existing category), responses: { '201': { description: Created }, '404': { description: Category not found }, '409': { description: Code already exists } } }
+  /tipos/{id}:
+    get: { summary: Get by id, parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: Found } } }
+    put: { summary: Update (admin/staff only), responses: { '200': { description: Updated } } }
+    delete: { summary: Delete (admin/staff only, blocked if it has active requests), responses: { '200': { description: Deleted }, '409': { description: Has active requests } } }
+  /estados:
+    get: { summary: List request statuses, responses: { '200': { description: Paginated list } } }
+    post: { summary: Create a status (admin/staff only), responses: { '201': { description: Created } } }
+  /estados/{id}:
+    get: { summary: Get by id, parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: Found } } }
+    delete: { summary: Delete (admin/staff only, blocked if assigned to active requests), responses: { '200': { description: Deleted }, '409': { description: Assigned to active requests } } }
+  /solicitudes:
+    get:
+      summary: List requests. Regular users only see their own; admin/staff see all.
+      parameters:
+        - { name: statusId, in: query, schema: { type: integer } }
+        - { name: assigneeUuid, in: query, schema: { type: string, format: uuid } }
+      responses: { '200': { description: Paginated list } }
+    post:
+      summary: Create a request (ticket). Due date is computed from the request type's SLA.
+      responses: { '201': { description: Created }, '404': { description: Request type not found } }
+  /solicitudes/{id}:
+    get:
+      summary: Get a request by id (owner, assignee or admin/staff only)
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { '200': { description: Found }, '403': { description: Not authorized } }
+  /solicitudes/{id}/historial:
+    get: { summary: Get the immutable status-transition audit trail, responses: { '200': { description: List of transitions } } }
+  /solicitudes/{id}/en-revision:
+    post: { summary: Start review, assigning the request to the acting staff member (admin/staff only), responses: { '200': { description: In review }, '409': { description: Not in pending status } } }
+  /solicitudes/{id}/aprobar:
+    post:
+      summary: Approve a request in review (admin/staff only)
+      requestBody: { content: { application/json: { schema: { type: object, properties: { resolutionNotes: { type: string } } } } } }
+      responses: { '200': { description: Approved }, '409': { description: Not in review } }
+  /solicitudes/{id}/rechazar:
+    post:
+      summary: Reject a request in review (admin/staff only)
+      requestBody: { content: { application/json: { schema: { type: object, properties: { resolutionNotes: { type: string } } } } } }
+      responses: { '200': { description: Rejected }, '409': { description: Not in review } }
+  /solicitudes/{id}/cerrar:
+    post: { summary: Close an approved/rejected request (admin/staff only), responses: { '200': { description: Closed }, '409': { description: Not approved/rejected } } }
+  /solicitudes/{requestId}/comentarios:
+    get: { summary: List comments (internal notes hidden from non-staff), responses: { '200': { description: List } } }
+    post: { summary: Post a comment (isInternal requires staff), responses: { '201': { description: Created }, '403': { description: Only staff can post internal comments } } }
+  /solicitudes/{requestId}/comentarios/{id}:
+    delete: { summary: Delete own comment (or admin/staff), responses: { '200': { description: Deleted } } }
+  /solicitudes/{requestId}/adjuntos:
+    get: { summary: List attachments, responses: { '200': { description: List } } }
+    post:
+      summary: >
+        Attach an existing storage-service file (by its numeric id) to this
+        request. Validates the file exists and belongs to the uploader (or
+        that the uploader is admin/staff) before linking it.
+      responses: { '201': { description: Attached }, '404': { description: File not found or not accessible } }
+  /solicitudes/{requestId}/adjuntos/{id}:
+    delete: { summary: Remove own attachment (or admin/staff), responses: { '200': { description: Removed } } }

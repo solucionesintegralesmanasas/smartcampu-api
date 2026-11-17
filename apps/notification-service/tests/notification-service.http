@@ -1,0 +1,212 @@
+### ============================================
+### NOTIFICATION SERVICE - Pruebas de endpoints (vía API Gateway)
+### Puerto interno: 3009 | Prefijo gateway: /api/v1/notificaciones -> /api/v1/notifications
+### Base de datos: uajs_notifications (notification_templates, notifications,
+### user_notification_preferences, push_subscriptions)
+### ============================================
+
+@gateway = http://localhost:3000
+@direct = http://localhost:3009
+@contentType = application/json
+@adminEmail = evidencia.qa@uajs.edu
+@adminPassword = EvidenciaQA.2026
+@notificationId = 1
+
+### ============================================
+### PREREQUISITOS
+### 1) SUPERADMIN asignado (ver user-service.http) y LOGIN ejecutado.
+### 2) Las notificaciones de dominio (reservas, solicitudes, eventos, PQRS) llegan por la cola
+###    notification_events; requiere Redis levantado.
+### 3) Las semillas de esta base están vacías: las plantillas se crean en la sección 1.
+### ============================================
+
+### HEALTH CHECK
+GET {{direct}}/api/v1/notifications/health
+
+### LOGIN
+# @name login
+POST {{gateway}}/api/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+### ============================================
+### 1. PLANTILLAS  (notification_templates)
+### code + channel: UK. Variables con llaves simples {nombre}.
+### ============================================
+
+### Crear plantilla in_app -> 201
+# @name createPlantilla
+POST {{gateway}}/api/v1/notificaciones/plantillas
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "code": "qa.solicitud.creada.0988",
+  "name": "Solicitud creada (QA)",
+  "channel": "in_app",
+  "subject": "",
+  "bodyText": "",
+  "variables": {
+    "nombre": "string",
+    "referencia": "string"
+  }
+}
+
+### Mismo código y canal -> 409 (UK code + channel)
+POST {{gateway}}/api/v1/notificaciones/plantillas
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "code": "qa.solicitud.creada",
+  "name": "Duplicada",
+  "channel": "in_app"
+}
+
+### Canal inválido -> 400 (enum in_app, email, push, sms)
+POST {{gateway}}/api/v1/notificaciones/plantillas
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "code": "qa.canal.malo",
+  "name": "Canal malo",
+  "channel": "whatsapp"
+}
+
+### Listar plantillas filtradas por canal -> 200
+GET {{gateway}}/api/v1/notificaciones/plantillas?page=1&limit=10&channel=in_app
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Obtener plantilla -> 200
+GET {{gateway}}/api/v1/notificaciones/plantillas/{{createPlantilla.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Actualizar plantilla -> 200
+PUT {{gateway}}/api/v1/notificaciones/plantillas/{{createPlantilla.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "bodyText": "Hola {nombre}, tu solicitud {referencia} está en proceso."
+}
+
+### ============================================
+### 2. PREFERENCIAS  (user_notification_preferences)
+### UK (user_uuid, category, channel): PUT hace upsert.
+### ============================================
+
+### Desactivar correo para la categoría booking -> 200
+PUT {{gateway}}/api/v1/notificaciones/preferencias
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "category": "booking",
+  "channel": "email",
+  "isEnabled": false
+}
+
+### Activar in_app para la categoría booking -> 200
+PUT {{gateway}}/api/v1/notificaciones/preferencias
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "category": "booking",
+  "channel": "in_app",
+  "isEnabled": true
+}
+
+### Mis preferencias -> 200
+GET {{gateway}}/api/v1/notificaciones/preferencias
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ============================================
+### 3. SUSCRIPCIONES PUSH  (push_subscriptions)
+### endpoint es UNIQUE. Si ya existe, el servicio la reactiva (upsert).
+### ============================================
+
+### Registrar dispositivo -> 201
+# @name createSuscripcion
+POST {{gateway}}/api/v1/notificaciones/suscripciones
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "endpoint": "https://push.example.com/qa-endpoint-1",
+  "authKey": "qa-auth-key-123",
+  "p256dhKey": "qa-p256dh-key-456",
+  "deviceType": "web",
+  "deviceLabel": "Chrome QA"
+}
+
+### Listar mis suscripciones -> 200
+GET {{gateway}}/api/v1/notificaciones/suscripciones
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Dar de baja (is_active = 0) -> 200
+DELETE {{gateway}}/api/v1/notificaciones/suscripciones/{{createSuscripcion.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ============================================
+### 4. NOTIFICACIONES  (notifications)
+### ============================================
+
+### Crear notificación manual (ADMIN) para el propio usuario -> 201
+# @name createNotificacion
+POST {{gateway}}/api/v1/notificaciones
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "recipientUuid": "{{login.response.body.data.user.uuid}}",
+  "channel": "in_app",
+  "subject": "Prueba QA",
+  "body": "Notificación de prueba generada desde notification-service.http",
+  "sourceService": "ms-bookings",
+  "sourceEntity": "booking"
+}
+
+### recipientUuid no es UUID -> 400
+POST {{gateway}}/api/v1/notificaciones
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "recipientUuid": "no-es-uuid",
+  "body": "Inválida"
+}
+
+### Mis notificaciones (filtros status y channel) -> 200
+GET {{gateway}}/api/v1/notificaciones?page=1&limit=10&status=queued
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Conteo de no leídas -> 200
+GET {{gateway}}/api/v1/notificaciones/no-leidas/conteo
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Marcar una como leída -> 200 (status = read, read_at = NOW())
+POST {{gateway}}/api/v1/notificaciones/{{notificationId}}/leer
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Marcar todas como leídas -> 200
+POST {{gateway}}/api/v1/notificaciones/leer-todas
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ============================================
+### LIMPIEZA
+### Las notificaciones no se borran (registro de entrega). Solo se elimina la plantilla QA.
+### ============================================
+DELETE {{gateway}}/api/v1/notificaciones/plantillas/{{createPlantilla.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ============================================
+### VERIFICACIÓN EN BD
+### SELECT id, recipient_uuid, channel, status, source_service, source_entity FROM uajs_notifications.notifications ORDER BY id DESC LIMIT 5;
+### SELECT category, channel, is_enabled FROM uajs_notifications.user_notification_preferences;
+### ============================================

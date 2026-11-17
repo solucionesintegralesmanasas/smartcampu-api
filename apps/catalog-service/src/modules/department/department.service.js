@@ -1,6 +1,7 @@
 const { esClient } = require('../../config/elasticsearch');
 const { env } = require('../../config/env');
 const { NotFoundError, ConflictError } = require('../../core/exceptions');
+const { safeCacheGet, safeCacheSet, safeCacheInvalidate } = require('../../core/helpers/cache.helper');
 
 const ES_INDEX = 'departments';
 
@@ -16,8 +17,7 @@ class DepartmentService {
   }
 
   async getCache(key) {
-    const cached = await this.redisClient.get(key);
-    return cached ? JSON.parse(cached) : null;
+    return safeCacheGet(this.redisClient, key);
   }
 
   async create(departmentDto) {
@@ -60,7 +60,7 @@ class DepartmentService {
 
     const result = await this.departmentRepository.findAll({ page, limit });
 
-    await this.redisClient.set(cacheKey, JSON.stringify(result), env.CATALOG_CACHE_TTL);
+    await safeCacheSet(this.redisClient, cacheKey, result, env.CATALOG_CACHE_TTL);
     this.trackListKey(cacheKey);
 
     return result;
@@ -78,7 +78,7 @@ class DepartmentService {
       throw new NotFoundError('Department not found');
     }
 
-    await this.redisClient.set(cacheKey, JSON.stringify(department), env.CATALOG_CACHE_TTL);
+    await safeCacheSet(this.redisClient, cacheKey, department, env.CATALOG_CACHE_TTL);
 
     return department;
   }
@@ -127,6 +127,11 @@ class DepartmentService {
       throw new NotFoundError('Department not found');
     }
 
+    const activeCities = await this.departmentRepository.countActiveCities(id);
+    if (activeCities > 0) {
+      throw new ConflictError('Cannot delete department: it has active cities');
+    }
+
     await this.departmentRepository.delete(id);
 
     try {
@@ -161,7 +166,7 @@ class DepartmentService {
 
   async invalidateCache() {
     const keys = Array.from(this.listKeys);
-    await Promise.all(keys.map((key) => this.redisClient.del(key)));
+    await safeCacheInvalidate(this.redisClient, keys);
     this.listKeys.clear();
   }
 }

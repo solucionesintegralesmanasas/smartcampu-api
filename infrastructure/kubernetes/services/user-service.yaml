@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service
+  namespace: uajs-smart-campus
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: user-service }
+  template:
+    metadata:
+      labels: { app: user-service }
+    spec:
+      containers:
+        - name: user-service
+          image: uajs-base:latest
+          command: ['node', 'apps/user-service/src/server.js']
+          ports:
+            - containerPort: 3002
+          envFrom:
+            - configMapRef: { name: uajs-shared-config }
+          env:
+            - name: PORT
+              value: '3002'
+            # Comparte la base de datos de auth-service (decisión de arquitectura
+            # documentada en apps/user-service/README.md).
+            - name: MYSQL_DATABASE
+              value: 'uajs_auth'
+            - name: MYSQL_PASSWORD
+              valueFrom: { secretKeyRef: { name: uajs-shared-secrets, key: MYSQL_PASSWORD } }
+            - name: SERVICE_AUTH_TOKEN
+              valueFrom: { secretKeyRef: { name: uajs-shared-secrets, key: SERVICE_AUTH_TOKEN } }
+          readinessProbe:
+            httpGet: { path: /api/v1/users/health, port: 3002 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /api/v1/users/health, port: 3002 }
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-service
+  namespace: uajs-smart-campus
+spec:
+  selector: { app: user-service }
+  ports:
+    - port: 3002
+      targetPort: 3002

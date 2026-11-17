@@ -1,0 +1,162 @@
+### ============================================================================
+### EVIDENCIA 1 · COLECCIÓN REST Client · 01 · PRUEBAS EXITOSAS (happy path)
+### ----------------------------------------------------------------------------
+### Flujos con datos válidos. Cada bloque indica el caso del plan (CP-…).
+###
+### NOTA DE REPETICIÓN: CP-AUT-01 registra un estudiante con un email fijo.
+### En la primera ejecución responde 201; en las siguientes, 409 (correcto:
+### el email ya existe). Las reservas y solicitudes usan la fecha
+### @bookingDate: si se repite la ejecución, cambiar la fecha antes de enviar.
+### ============================================================================
+
+@gateway = http://localhost:3000
+@contentType = application/json
+@adminEmail = evidencia.qa@uajs.edu
+@adminPassword = EvidenciaQA.2026
+@estudianteEmail = estudiante.evidencia@uajs.edu
+@estudiantePassword = EstudianteQA.2026
+@bookingDate = 2027-01-27
+@resourceId = 1
+@tipoReservaId = 1
+@tipoSolicitudId = 1
+@pqrsTipoId = 1
+@eventoId = 1
+
+
+### ============================================================================
+### A · AUTENTICACIÓN Y SESIÓN
+### ============================================================================
+
+### CP-AUT-01 · Registrar estudiante nuevo · esperado 201 (ver nota de repetición)
+# @name registro
+POST {{gateway}}/api/v1/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "{{estudianteEmail}}",
+  "password": "{{estudiantePassword}}",
+  "firstName": "Estudiante",
+  "lastName": "Evidencia",
+  "documentTypeCode": "CC",
+  "documentNumber": "1098000111"
+}
+
+### CP-AUT-04 · Login del estudiante · esperado 200 con accessToken y refreshToken
+# @name loginEstudiante
+POST {{gateway}}/api/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{estudianteEmail}}",
+  "password": "{{estudiantePassword}}"
+}
+
+### CP-AUT-04 · Login del administrador · esperado 200
+# @name login
+POST {{gateway}}/api/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+### CP-GW-04 · Consulta de sedes con token válido · esperado 200 (ruta reescrita a /university)
+GET {{gateway}}/api/v1/universidad/sedes?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### CP-AUZ-02 · Administrador consulta usuarios · esperado 200
+GET {{gateway}}/api/v1/usuarios/usuarios?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+
+### ============================================================================
+### B · RESERVAS (booking-service)
+### ============================================================================
+
+### CP-RES-01 · Crear reserva en franja libre · esperado 201, estado inicial pending
+# @name reservaCreada
+POST {{gateway}}/api/v1/reservas/reservas
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "bookingTypeId": {{tipoReservaId}},
+  "resourceId": {{resourceId}},
+  "title": "Reserva exitosa · evidencia 1",
+  "description": "Caso CP-RES-01 de la matriz de pruebas",
+  "bookingDate": "{{bookingDate}}",
+  "startTime": "14:00",
+  "endTime": "15:00",
+  "expectedAttendees": 10
+}
+
+
+### ============================================================================
+### C · SOLICITUDES (request-service)
+### ============================================================================
+
+### CP-SOL-01 · Crear solicitud · esperado 201, estado inicial pending
+# @name solicitudCreada
+POST {{gateway}}/api/v1/solicitudes/solicitudes
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "requestTypeId": {{tipoSolicitudId}},
+  "title": "Solicitud exitosa · evidencia 1",
+  "description": "Caso CP-SOL-01 de la matriz de pruebas",
+  "formData": { "priority": "MEDIA" }
+}
+
+
+### ============================================================================
+### D · PQRS (pqrs-service)
+### ============================================================================
+
+### CP-PQR-01 · Radicar PQRS anónima · esperado 201 con número de radicado
+# @name pqrsCreada
+POST {{gateway}}/api/v1/pqrs
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "typeId": {{pqrsTipoId}},
+  "subject": "Prueba de radicación anónima",
+  "description": "Caso CP-PQR-01 de la matriz de pruebas de la evidencia 1",
+  "isAnonymous": true
+}
+
+
+### ============================================================================
+### E · EVENTOS (event-service)
+### ============================================================================
+
+### CP-EVT-01 · Inscribirse en evento publicado con cupo · esperado 201 (confirmada o lista de espera)
+### PRECONDICIÓN: el evento 1 debe estar PUBLICADO (POST /eventos/eventos/1/publicar
+### con token de administrador). Sin esa precondición la API responde 409 con
+### "Registration is only open while the event is published".
+POST {{gateway}}/api/v1/eventos/eventos/{{eventoId}}/inscripciones
+Authorization: Bearer {{loginEstudiante.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+
+### ============================================================================
+### F · ALMACENAMIENTO (storage-service)
+### ============================================================================
+
+### CP-STO-01 · Subir archivo PDF permitido · esperado 201 con id del archivo
+POST {{gateway}}/api/v1/archivos/archivos
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: multipart/form-data; boundary=----EvidenciaBoundary
+
+------EvidenciaBoundary
+Content-Disposition: form-data; name="file"; filename="evidencia-1.pdf"
+Content-Type: application/pdf
+
+Contenido de prueba de la evidencia 1.
+------EvidenciaBoundary
+Content-Disposition: form-data; name="ownerType"
+
+solicitud
+------EvidenciaBoundary--

@@ -24,19 +24,29 @@ describe('Auth Middleware', () => {
   });
 
   it('debe retornar 401 si el token está expirado', async () => {
-    const expiredToken = jwt.sign({ sub: 1, roles: ['USER'] }, env.JWT_SECRET, {
+    const expiredToken = jwt.sign({ sub: 1, uuid: 'u1', roles: ['USER'] }, env.JWT_SECRET, {
       expiresIn: '-1h',
     });
     const res = await request(app).get('/protected').set('Authorization', `Bearer ${expiredToken}`);
     expect(res.status).toBe(401);
   });
 
+  it('debe retornar 401 si el token no trae uuid', async () => {
+    const tokenSinUuid = jwt.sign({ sub: 123, roles: ['ADMIN'] }, env.JWT_SECRET, {
+      expiresIn: '1h',
+    });
+    const res = await request(app).get('/protected').set('Authorization', `Bearer ${tokenSinUuid}`);
+    expect(res.status).toBe(401);
+  });
+
   it('debe inyectar req.user si el token es válido', async () => {
-    const validToken = jwt.sign({ sub: 123, roles: ['ADMIN'] }, env.JWT_SECRET, {
+    const validToken = jwt.sign({ sub: 123, uuid: 'user-uuid-123', roles: ['ADMIN'] }, env.JWT_SECRET, {
       expiresIn: '1h',
     });
     const res = await request(app).get('/protected').set('Authorization', `Bearer ${validToken}`);
     expect(res.status).toBe(200);
-    expect(res.body.user).toEqual({ id: 123, roles: ['ADMIN'] });
+    expect(res.body.user).toEqual({
+      id: 123, uuid: 'user-uuid-123', nombre: null, roles: ['ADMIN'],
+    });
   });
 });

@@ -1,0 +1,160 @@
+### ============================================================================
+### EVIDENCIA 1 · COLECCIÓN REST Client · 04 · REGRESIÓN
+### ----------------------------------------------------------------------------
+### Repetir después de cada corrección o despliegue. Comprueba que los
+### flujos que ya funcionaban siguen igual y que los defectos conocidos
+### siguen documentados (no se corrigieron sin registrarlo en el plan).
+###
+### Cada bloque indica el caso del plan (CP-…) y el resultado esperado.
+### Ejecutar completo y comparar con la columna "Resultado obtenido".
+### ============================================================================
+
+@gateway = http://localhost:3000
+@contentType = application/json
+@adminEmail = evidencia.qa@uajs.edu
+@adminPassword = EvidenciaQA.2026
+@reservaExistenteId = 4
+@solicitudExistenteId = 1
+@sedeId = 1
+@userId = 6
+
+
+### ----------------------------------------------------------------------------
+### R1 · Infraestructura y salud
+### ----------------------------------------------------------------------------
+
+### CP-INF-06 · Gateway liveness · esperado 200
+GET {{gateway}}/health/liveness
+
+### CP-INF-06 · Gateway readiness · esperado 200
+GET {{gateway}}/health/readiness
+
+
+### ----------------------------------------------------------------------------
+### R2 · Autenticación (regresión del flujo de login y tokens)
+### ----------------------------------------------------------------------------
+
+### CP-AUT-04 · Login · esperado 200 con accessToken
+# @name login
+POST {{gateway}}/api/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+### CP-AUT-05 · Contraseña incorrecta · esperado 401 (no debe cambiar a 200 ni 500)
+POST {{gateway}}/api/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{adminEmail}}",
+  "password": "Incorrecta.2026"
+}
+
+### CP-AUT-04 · Refresh del token · esperado 200
+### Esperar 2 s después del login: si se envía en el mismo segundo, el
+### refreshToken es idéntico y responde 500 (defecto conocido, ver README).
+POST {{gateway}}/api/v1/auth/refresh
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "refreshToken": "{{login.response.body.data.refreshToken}}"
+}
+
+
+### ----------------------------------------------------------------------------
+### R3 · Consultas de catálogos y datos base (lectura)
+### ----------------------------------------------------------------------------
+
+### CP-GW-04 · Sedes · esperado 200
+GET {{gateway}}/api/v1/universidad/sedes?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### CP-UNI-01 · Detalle de sede · esperado 200
+GET {{gateway}}/api/v1/universidad/sedes/{{sedeId}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### CP-AUZ-02 · Usuarios (administrador) · esperado 200
+GET {{gateway}}/api/v1/usuarios/usuarios?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### CP-AUZ-02 · Detalle de usuario por id · esperado 200
+GET {{gateway}}/api/v1/usuarios/usuarios/{{userId}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Recursos · esperado 200
+GET {{gateway}}/api/v1/recursos/recursos?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Tipos de reserva · esperado 200
+GET {{gateway}}/api/v1/reservas/tipos?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Tipos de solicitud · esperado 200
+GET {{gateway}}/api/v1/solicitudes/tipos?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Eventos · esperado 200
+GET {{gateway}}/api/v1/eventos/eventos?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Notificaciones · esperado 200
+GET {{gateway}}/api/v1/notificaciones?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+
+### ----------------------------------------------------------------------------
+### R4 · Datos persistidos en ejecuciones anteriores (siguen legibles)
+### ----------------------------------------------------------------------------
+
+### CP-RES-01 (regresión) · Reserva existente creada en ejecuciones previas · esperado 200
+GET {{gateway}}/api/v1/reservas/reservas/{{reservaExistenteId}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Historial de la reserva existente · esperado 200
+GET {{gateway}}/api/v1/reservas/reservas/{{reservaExistenteId}}/historial
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Solicitud existente · esperado 200
+GET {{gateway}}/api/v1/solicitudes/solicitudes/{{solicitudExistenteId}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+
+### ----------------------------------------------------------------------------
+### R5 · Negativos críticos (no deben degradarse)
+### ----------------------------------------------------------------------------
+
+### CP-GW-01 · Sin token · esperado 401
+GET {{gateway}}/api/v1/reservas/reservas
+
+### CP-GW-03 · Ruta inexistente · esperado 404
+GET {{gateway}}/api/v1/no-existe
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### CP-VAL-R01 · Horario invertido · esperado 400
+POST {{gateway}}/api/v1/reservas/reservas
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "bookingTypeId": 1,
+  "resourceId": 1,
+  "title": "Regresion horario invertido",
+  "bookingDate": "2027-03-01",
+  "startTime": "11:00",
+  "endTime": "09:00"
+}
+
+
+### ----------------------------------------------------------------------------
+### R6 · Defectos conocidos (deben seguir igual hasta que se corrijan)
+### ----------------------------------------------------------------------------
+
+### CP-CAT-01 · Sedes por catálogo · ESPERADO 500 (defecto conocido: tabla
+### uajs_catalog.sedes inexistente). Si cambia a 200, actualizar el plan.
+GET {{gateway}}/api/v1/catalogos/campuses?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+

@@ -32,7 +32,12 @@ app.use(elasticsearchMiddleware);
 
 app.use(healthRoutes);
 
+// Limita por IP antes de autenticar, para que los intentos con token
+// ausente/inválido también cuenten contra el límite (si no, un atacante
+// podía inundar el gateway con tokens inválidos sin tope alguno).
+app.use(createRateLimitMiddleware());
 app.use(authMiddleware);
+// Segundo límite, ya por usuario autenticado, además del límite por IP de arriba.
 app.use(createRateLimitMiddleware());
 
 setupProxy(app);

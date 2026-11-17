@@ -1,0 +1,101 @@
+openapi: 3.0.0
+info:
+  title: Booking Service API
+  version: 1.0.0
+  description: >
+    Ciclo de vida de reservas de recursos: pending -> approved/rejected;
+    approved -> confirmed -> completed/cancelled. Antes de crear una reserva
+    consulta resource-service (existencia + disponibilidad operativa) y
+    revisa traslapes contra sus propias reservas activas.
+servers:
+  - url: /api/v1/bookings
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200': { description: Service status }
+  /tipos:
+    get: { summary: List booking types, responses: { '200': { description: Paginated list } } }
+    post: { summary: Create a booking type (admin/staff only), responses: { '201': { description: Created }, '409': { description: Code already exists } } }
+  /tipos/{id}:
+    get: { summary: Get by id, parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: Found } } }
+    put: { summary: Update (admin/staff only), responses: { '200': { description: Updated } } }
+    delete: { summary: Delete (admin/staff only, blocked if it has active bookings), responses: { '200': { description: Deleted }, '409': { description: Has active bookings } } }
+  /estados:
+    get: { summary: List booking statuses, responses: { '200': { description: Paginated list } } }
+    post: { summary: Create a status (admin/staff only), responses: { '201': { description: Created } } }
+  /estados/{id}:
+    get: { summary: Get by id, parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: Found } } }
+    delete: { summary: Delete (admin/staff only, blocked if assigned to active bookings), responses: { '200': { description: Deleted }, '409': { description: Assigned to active bookings } } }
+  /reservas:
+    get:
+      summary: List bookings. Regular users only see their own; admin/staff see all.
+      parameters:
+        - { name: statusId, in: query, schema: { type: integer } }
+        - { name: resourceUuid, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Paginated list }
+    post:
+      summary: >
+        Create a booking request. Validates the booking type, checks the
+        resource exists and is operationally available (resource-service),
+        and checks for overlapping active bookings before creating.
+      responses:
+        '201': { description: Created (status depends on the booking type's requiresApproval) }
+        '404': { description: Booking type or resource not found }
+        '409': { description: Resource not available or already booked for this window }
+  /reservas/{id}:
+    get:
+      summary: Get a booking by id (owner or admin/staff only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Found }
+        '403': { description: Not the owner and not admin/staff }
+  /reservas/{id}/historial:
+    get:
+      summary: Get the immutable status-transition audit trail for a booking
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: List of transitions }
+  /reservas/{id}/aprobar:
+    post:
+      summary: Approve a pending booking (admin/staff only)
+      responses:
+        '200': { description: Approved }
+        '409': { description: Booking is not in pending status }
+  /reservas/{id}/rechazar:
+    post:
+      summary: Reject a pending booking (admin/staff only)
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { reason: { type: string } } }
+      responses:
+        '200': { description: Rejected }
+        '409': { description: Booking is not in pending status }
+  /reservas/{id}/confirmar:
+    post:
+      summary: Confirm an approved booking (admin/staff only)
+      responses:
+        '200': { description: Confirmed }
+        '409': { description: Booking is not in approved status }
+  /reservas/{id}/cancelar:
+    post:
+      summary: Cancel a booking (owner or admin/staff only)
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { reason: { type: string } } }
+      responses:
+        '200': { description: Cancelled }
+        '403': { description: Not the owner and not admin/staff }
+        '409': { description: Booking is already in a terminal status }
+  /reservas/{id}/completar:
+    post:
+      summary: Mark a confirmed booking as completed (admin/staff only)
+      responses:
+        '200': { description: Completed }
+        '409': { description: Booking is not in confirmed status }

@@ -1,6 +1,7 @@
 const { esClient } = require('../../config/elasticsearch');
 const { env } = require('../../config/env');
 const { NotFoundError, ConflictError } = require('../../core/exceptions');
+const { safeCacheGet, safeCacheSet, safeCacheInvalidate } = require('../../core/helpers/cache.helper');
 
 const ES_INDEX = 'cities';
 
@@ -16,14 +17,13 @@ class CityService {
   }
 
   async getCache(key) {
-    const cached = await this.redisClient.get(key);
-    return cached ? JSON.parse(cached) : null;
+    return safeCacheGet(this.redisClient, key);
   }
 
   async create(cityDto) {
-    const existing = await this.cityRepository.findByName(cityDto.name);
+    const existing = await this.cityRepository.findByName(cityDto.name, cityDto.stateId);
     if (existing) {
-      throw new ConflictError('City name already exists');
+      throw new ConflictError('City name already exists in this department');
     }
 
     const city = await this.cityRepository.create(cityDto);
@@ -61,7 +61,7 @@ class CityService {
 
     const result = await this.cityRepository.findAll({ page, limit });
 
-    await this.redisClient.set(cacheKey, JSON.stringify(result), env.CATALOG_CACHE_TTL);
+    await safeCacheSet(this.redisClient, cacheKey, result, env.CATALOG_CACHE_TTL);
     this.trackListKey(cacheKey);
 
     return result;
@@ -79,7 +79,7 @@ class CityService {
       throw new NotFoundError('City not found');
     }
 
-    await this.redisClient.set(cacheKey, JSON.stringify(city), env.CATALOG_CACHE_TTL);
+    await safeCacheSet(this.redisClient, cacheKey, city, env.CATALOG_CACHE_TTL);
 
     return city;
   }
@@ -93,7 +93,7 @@ class CityService {
 
     const cities = await this.cityRepository.findByStateId(stateId);
 
-    await this.redisClient.set(cacheKey, JSON.stringify(cities), env.CATALOG_CACHE_TTL);
+    await safeCacheSet(this.redisClient, cacheKey, cities, env.CATALOG_CACHE_TTL);
     this.trackListKey(cacheKey);
 
     return cities;
@@ -106,9 +106,12 @@ class CityService {
     }
 
     if (cityDto.name && cityDto.name !== existing.name) {
-      const duplicate = await this.cityRepository.findByName(cityDto.name);
+      const duplicate = await this.cityRepository.findByName(
+        cityDto.name,
+        cityDto.stateId ?? existing.stateId,
+      );
       if (duplicate) {
-        throw new ConflictError('City name already exists');
+        throw new ConflictError('City name already exists in this department');
       }
     }
 
@@ -142,6 +145,11 @@ class CityService {
     const existing = await this.cityRepository.findById(id);
     if (!existing) {
       throw new NotFoundError('City not found');
+    }
+
+    const activeCampuses = await this.cityRepository.countActiveCampuses(id);
+    if (activeCampuses > 0) {
+      throw new ConflictError('Cannot delete city: it has active campuses');
     }
 
     await this.cityRepository.delete(id);
@@ -178,7 +186,7 @@ class CityService {
 
   async invalidateCache() {
     const keys = Array.from(this.listKeys);
-    await Promise.all(keys.map((key) => this.redisClient.del(key)));
+    await safeCacheInvalidate(this.redisClient, keys);
     this.listKeys.clear();
   }
 }

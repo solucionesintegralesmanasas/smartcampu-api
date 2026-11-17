@@ -1,0 +1,256 @@
+openapi: 3.0.0
+info:
+  title: University Service API
+  version: 1.0.0
+  description: >
+    Estructura académica: sedes, empresas, terceros (personas), facultades,
+    programas, estudiantes y docentes. Cadena de dependencia:
+    sede -> facultad -> programa; tercero + programa -> estudiante;
+    tercero + facultad -> docente.
+servers:
+  - url: /api/v1/university
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200': { description: Service status }
+  /sedes:
+    get:
+      summary: List sedes (any authenticated user)
+      responses:
+        '200': { description: Paginated list of sedes }
+    post:
+      summary: Create a sede (admin only)
+      responses:
+        '201': { description: Sede created }
+        '409': { description: Sede name already exists }
+  /sedes/{id}:
+    get:
+      summary: Get a sede by id
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Sede found }
+    put:
+      summary: Update a sede (admin only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Sede updated }
+    delete:
+      summary: Delete a sede (admin only, blocked if it has active faculties)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Sede deleted }
+        '409': { description: Sede has active faculties }
+  /empresas:
+    get:
+      summary: List companies (any authenticated user)
+      responses:
+        '200': { description: Paginated list of companies }
+    post:
+      summary: Create a company (admin only)
+      responses:
+        '201': { description: Company created }
+        '409': { description: Tax id already exists }
+  /empresas/{id}:
+    get:
+      summary: Get a company by id
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Company found }
+    put:
+      summary: Update a company (admin only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Company updated }
+    delete:
+      summary: Delete a company (admin only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Company deleted }
+  /terceros:
+    get:
+      summary: List persons (admin/staff only — sensitive PII)
+      responses:
+        '200': { description: Paginated list of persons }
+    post:
+      summary: Create a person record (admin/staff only)
+      responses:
+        '201': { description: Person created }
+        '409': { description: A person with this document already exists }
+  /terceros/{id}:
+    get:
+      summary: Get a person by id (admin/staff only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Person found }
+    put:
+      summary: Update a person (admin/staff only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Person updated }
+    delete:
+      summary: Delete a person (admin/staff only, blocked if linked to an active student/teacher)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Person deleted }
+        '409': { description: Person is linked to an active student or teacher record }
+  /facultades:
+    get:
+      summary: List faculties (any authenticated user)
+      parameters:
+        - { name: campusId, in: query, schema: { type: integer } }
+      responses:
+        '200': { description: Paginated list of faculties }
+    post:
+      summary: Create a faculty (admin only, requires an existing sede)
+      responses:
+        '201': { description: Faculty created }
+        '404': { description: Sede not found }
+        '409': { description: Faculty code already exists }
+  /facultades/{id}:
+    get:
+      summary: Get a faculty by id
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Faculty found }
+    put:
+      summary: Update a faculty (admin only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Faculty updated }
+    delete:
+      summary: Delete a faculty (admin only, blocked if it has active programs or teachers)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Faculty deleted }
+        '409': { description: Faculty has active programs or teachers }
+  /programas:
+    get:
+      summary: List programs (any authenticated user)
+      parameters:
+        - { name: facultyId, in: query, schema: { type: integer } }
+      responses:
+        '200': { description: Paginated list of programs }
+    post:
+      summary: Create a program (admin only, requires an existing faculty)
+      responses:
+        '201': { description: Program created }
+        '404': { description: Faculty not found }
+        '409': { description: Program code already exists }
+  /programas/{id}:
+    get:
+      summary: Get a program by id
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Program found }
+    put:
+      summary: Update a program (admin only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Program updated }
+    delete:
+      summary: Delete a program (admin only, blocked if it has active students)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Program deleted }
+        '409': { description: Program has active students }
+  /estudiantes:
+    get:
+      summary: List students (admin/staff only)
+      parameters:
+        - { name: programId, in: query, schema: { type: integer } }
+        - { name: status, in: query, schema: { type: string } }
+      responses:
+        '200': { description: Paginated list of students }
+    post:
+      summary: Enroll a student (admin/staff only, requires existing tercero and programa)
+      responses:
+        '201': { description: Student created }
+        '404': { description: Person or program not found }
+        '409': { description: Person already a student, or student code already exists }
+  /estudiantes/by-user/{userUuid}:
+    get:
+      summary: Get the student record linked to an auth-service user (internal, service-to-service only)
+      parameters:
+        - { name: userUuid, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Student found }
+        '401': { description: Missing/invalid X-Service-Token }
+        '404': { description: No student record for this user }
+  /estudiantes/{id}:
+    get:
+      summary: Get a student by id (admin/staff only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Student found }
+    put:
+      summary: Update a student's academic status (admin/staff only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Student updated }
+    delete:
+      summary: Deactivate a student (admin/staff only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Student deleted }
+  /docentes:
+    get:
+      summary: List teachers (any authenticated user)
+      parameters:
+        - { name: facultyId, in: query, schema: { type: integer } }
+        - { name: status, in: query, schema: { type: string } }
+      responses:
+        '200': { description: Paginated list of teachers }
+    post:
+      summary: Hire a teacher (admin/staff only, requires existing tercero and facultad)
+      responses:
+        '201': { description: Teacher created }
+        '404': { description: Person or faculty not found }
+        '409': { description: Person already a teacher, or teacher code already exists }
+  /docentes/by-user/{userUuid}:
+    get:
+      summary: Get the teacher record linked to an auth-service user (internal, service-to-service only)
+      parameters:
+        - { name: userUuid, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Teacher found }
+        '401': { description: Missing/invalid X-Service-Token }
+        '404': { description: No teacher record for this user }
+  /docentes/{id}:
+    get:
+      summary: Get a teacher by id
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Teacher found }
+    put:
+      summary: Update a teacher's contract status (admin/staff only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Teacher updated }
+    delete:
+      summary: Deactivate a teacher (admin/staff only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Teacher deleted }

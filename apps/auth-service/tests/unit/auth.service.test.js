@@ -56,8 +56,12 @@ function mockRepository(overrides = {}) {
       email: 'test@test.com',
       roles: ['user'],
     }),
-    updateRefreshToken: jest.fn().mockResolvedValue(undefined),
+    createRefreshToken: jest.fn().mockResolvedValue({ familyId: 'family-1' }),
     findByRefreshToken: jest.fn().mockResolvedValue(null),
+    findRefreshTokenRecord: jest.fn().mockResolvedValue(null),
+    revokeRefreshTokenByHash: jest.fn().mockResolvedValue(undefined),
+    revokeRefreshTokenById: jest.fn().mockResolvedValue(undefined),
+    revokeRefreshTokenFamily: jest.fn().mockResolvedValue(undefined),
     findPermissions: jest.fn().mockResolvedValue([{ module: 'auth', action: 'read' }]),
     invalidateRefreshTokens: jest.fn().mockResolvedValue(undefined),
     createPasswordResetToken: jest.fn().mockResolvedValue(undefined),
@@ -145,12 +149,13 @@ describe('AuthService', () => {
       expect(result).toHaveProperty('accessToken');
       expect(result).toHaveProperty('refreshToken');
       expect(result.user.id).toBe(1);
-      expect(repo.updateRefreshToken).toHaveBeenCalled();
+      expect(repo.createRefreshToken).toHaveBeenCalled();
       expect(esClient.index).toHaveBeenCalled();
     });
 
     it('debe lanzar UnauthorizedError si el usuario no existe', async () => {
       repo.findByEmail.mockResolvedValue(null);
+      bcrypt.compare.mockResolvedValue(false);
 
       await expect(
         service.login({ email: 'noexist@test.com', password: 'pass' }, mockReq()),
@@ -164,6 +169,17 @@ describe('AuthService', () => {
           }),
         }),
       );
+    });
+
+    it('debe comparar contra un hash fijo cuando el usuario no existe (sin filtrar por temporización)', async () => {
+      repo.findByEmail.mockResolvedValue(null);
+      bcrypt.compare.mockResolvedValue(false);
+
+      await expect(
+        service.login({ email: 'noexist@test.com', password: 'pass' }, mockReq()),
+      ).rejects.toThrow(UnauthorizedError);
+
+      expect(bcrypt.compare).toHaveBeenCalledWith('pass', expect.stringMatching(/^\$2[aby]\$/));
     });
 
     it('debe lanzar UnauthorizedError si la contraseña es incorrecta', async () => {
@@ -192,24 +208,37 @@ describe('AuthService', () => {
   });
 
   describe('refreshToken', () => {
-    it('debe retornar un nuevo accessToken con refresh token válido', async () => {
-      repo.findByRefreshToken.mockResolvedValue({
-        id: 1,
-        uuid: 'u1',
-        email: 'test@test.com',
-        roles: ['user'],
-      });
+    function validRecord(overrides = {}) {
+      return {
+        id: 10,
+        userId: 1,
+        familyId: 'family-1',
+        revokedAt: null,
+        expiresAt: new Date(Date.now() + 60000),
+        ...overrides,
+      };
+    }
+
+    it('debe rotar el refresh token y retornar un nuevo accessToken', async () => {
+      repo.findRefreshTokenRecord.mockResolvedValue(validRecord());
       jwt.verify.mockReturnValue({ sub: 1 });
 
-      const result = await service.refreshToken({ refreshToken: 'valid-token' });
+      const result = await service.refreshToken({ refreshToken: 'valid-token' }, mockReq());
 
       expect(result).toHaveProperty('accessToken');
+      expect(result).toHaveProperty('refreshToken');
       expect(result.expiresIn).toBe('15m');
+      expect(repo.revokeRefreshTokenById).toHaveBeenCalledWith(10, 'rotation');
+      expect(repo.createRefreshToken).toHaveBeenCalledWith(
+        1,
+        expect.any(String),
+        expect.objectContaining({ familyId: 'family-1' }),
+      );
       expect(esClient.index).toHaveBeenCalled();
     });
 
-    it('debe lanzar UnauthorizedError si el refresh token es inválido', async () => {
-      repo.findByRefreshToken.mockResolvedValue(null);
+    it('debe lanzar UnauthorizedError si el refresh token no existe', async () => {
+      repo.findRefreshTokenRecord.mockResolvedValue(null);
 
       await expect(service.refreshToken({ refreshToken: 'invalid' })).rejects.toThrow(
         UnauthorizedError,
@@ -217,24 +246,31 @@ describe('AuthService', () => {
     });
 
     it('debe lanzar UnauthorizedError si el refresh token está expirado', async () => {
-      repo.findByRefreshToken.mockResolvedValue({
-        id: 1,
-        uuid: 'u1',
-        email: 'test@test.com',
-        roles: ['user'],
-      });
-      jwt.verify.mockImplementation(() => {
-        throw new Error('jwt expired');
-      });
+      repo.findRefreshTokenRecord.mockResolvedValue(
+        validRecord({ expiresAt: new Date(Date.now() - 1000) }),
+      );
 
       await expect(service.refreshToken({ refreshToken: 'expired' })).rejects.toThrow(
         UnauthorizedError,
       );
     });
+
+    it('debe revocar toda la familia si el token ya fue usado (reuso/robo)', async () => {
+      repo.findRefreshTokenRecord.mockResolvedValue(
+        validRecord({ revokedAt: new Date() }),
+      );
+
+      await expect(service.refreshToken({ refreshToken: 'reused-token' })).rejects.toThrow(
+        UnauthorizedError,
+      );
+
+      expect(repo.revokeRefreshTokenFamily).toHaveBeenCalledWith('family-1', 'theft');
+      expect(repo.createRefreshToken).not.toHaveBeenCalled();
+    });
   });
 
   describe('logout', () => {
-    it('debe cerrar sesión invalidando el refresh token', async () => {
+    it('debe cerrar sesión revocando solo el refresh token presentado', async () => {
       repo.findByRefreshToken.mockResolvedValue({
         id: 1,
         uuid: 'u1',
@@ -244,7 +280,8 @@ describe('AuthService', () => {
       const result = await service.logout({ refreshToken: 'valid-token' }, mockReq());
 
       expect(result.message).toBeDefined();
-      expect(repo.invalidateRefreshTokens).toHaveBeenCalledWith(1);
+      expect(repo.revokeRefreshTokenByHash).toHaveBeenCalledWith('valid-token', 'logout');
+      expect(repo.invalidateRefreshTokens).not.toHaveBeenCalled();
       expect(esClient.index).toHaveBeenCalledWith(
         expect.objectContaining({
           document: expect.objectContaining({ eventType: 'user_logged_out', status: 'success' }),
@@ -259,7 +296,7 @@ describe('AuthService', () => {
         UnauthorizedError,
       );
 
-      expect(repo.invalidateRefreshTokens).not.toHaveBeenCalled();
+      expect(repo.revokeRefreshTokenByHash).not.toHaveBeenCalled();
     });
   });
 

@@ -1,0 +1,144 @@
+### ============================================================================
+### EVIDENCIA 1 · COLECCIÓN REST Client · 03 · PERSISTENCIA
+### ----------------------------------------------------------------------------
+### Comprueba que lo creado por la API se guarda y se puede leer de nuevo:
+### crear → consultar por id → consultar el historial → volver a iniciar
+### sesión. Al final hay consultas SQL para verificar directamente en MySQL.
+###
+### Orden: ejecutar de arriba abajo. Usa @fechaPersistencia distinta de la
+### fecha de 01-exitosas.http y de 02-validaciones.http si repites la prueba.
+### ============================================================================
+
+@gateway = http://localhost:3000
+@contentType = application/json
+@adminEmail = evidencia.qa@uajs.edu
+@adminPassword = EvidenciaQA.2026
+@estudianteEmail = estudiante.evidencia@uajs.edu
+@estudiantePassword = EstudianteQA.2026
+@fechaPersistencia = 2027-02-17
+@resourceId = 1
+@tipoReservaId = 1
+@tipoSolicitudId = 1
+
+
+### ----------------------------------------------------------------------------
+### 1. Sesión (CP-AUT-04)
+### ----------------------------------------------------------------------------
+
+# @name login
+POST {{gateway}}/api/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+
+### ----------------------------------------------------------------------------
+### 2. Reserva: crear → leer → historial
+### ----------------------------------------------------------------------------
+
+### P-RES-01 · Crear reserva · esperado 201, estado pending
+# @name persReserva
+POST {{gateway}}/api/v1/reservas/reservas
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "bookingTypeId": {{tipoReservaId}},
+  "resourceId": {{resourceId}},
+  "title": "Persistencia reserva · evidencia 1",
+  "description": "Verifica que la reserva queda guardada",
+  "bookingDate": "{{fechaPersistencia}}",
+  "startTime": "09:00",
+  "endTime": "10:00",
+  "expectedAttendees": 8
+}
+
+### P-RES-02 · Leer la reserva creada por id · esperado 200 con los mismos datos
+GET {{gateway}}/api/v1/reservas/reservas/{{persReserva.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### P-RES-03 · Historial de la reserva · esperado 200 con transición de creación
+GET {{gateway}}/api/v1/reservas/reservas/{{persReserva.response.body.data.id}}/historial
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### P-RES-04 · La reserva aparece en el listado · esperado 200 y el id incluido
+GET {{gateway}}/api/v1/reservas/reservas?page=1&limit=50
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+
+### ----------------------------------------------------------------------------
+### 3. Solicitud: crear → leer → transición → leer de nuevo
+### ----------------------------------------------------------------------------
+
+### P-SOL-01 · Crear solicitud · esperado 201, estado pending
+# @name persSolicitud
+POST {{gateway}}/api/v1/solicitudes/solicitudes
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "requestTypeId": {{tipoSolicitudId}},
+  "title": "Persistencia solicitud · evidencia 1",
+  "description": "Verifica la transición de estado persistida",
+  "formData": { "priority": "BAJA" }
+}
+
+### P-SOL-02 · Transición pending → in_review · esperado 200
+POST {{gateway}}/api/v1/solicitudes/solicitudes/{{persSolicitud.response.body.data.id}}/en-revision
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### P-SOL-03 · Releer la solicitud · esperado 200 con el nuevo estado (no pending)
+GET {{gateway}}/api/v1/solicitudes/solicitudes/{{persSolicitud.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### P-SOL-04 · Historial registra la transición · esperado 200 con 2 entradas
+GET {{gateway}}/api/v1/solicitudes/solicitudes/{{persSolicitud.response.body.data.id}}/historial
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+
+### ----------------------------------------------------------------------------
+### 4. Usuario: registrar → iniciar sesión de nuevo → perfil
+### ----------------------------------------------------------------------------
+
+### P-USR-01 · Login del estudiante tras el registro · esperado 200
+# @name loginPersistencia
+POST {{gateway}}/api/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{estudianteEmail}}",
+  "password": "{{estudiantePassword}}"
+}
+
+### P-USR-02 · El perfil devuelve el mismo email registrado · esperado 200
+GET {{gateway}}/api/v1/usuarios/perfil
+Authorization: Bearer {{loginPersistencia.response.body.data.accessToken}}
+
+
+### ----------------------------------------------------------------------------
+### 5. Verificación directa en MySQL (ejecutar en DBeaver / HeidiSQL)
+### Conexión: 127.0.0.1:3307 · uajs_user / uajs206**
+### ----------------------------------------------------------------------------
+
+### P-DB-01 · La reserva creada está persistida con estado pending
+# SELECT b.id, b.reference_number, b.booking_date, b.start_time, b.end_time, s.code AS estado
+#   FROM uajs_bookings.bookings b
+#   JOIN uajs_bookings.booking_statuses s ON s.id = b.status_id
+#  WHERE b.title = 'Persistencia reserva · evidencia 1'
+#  ORDER BY b.id DESC LIMIT 1;
+
+### P-DB-02 · La solicitud quedó persistida con su estado actual (status_id tras la transición)
+# SELECT r.id, r.ticket_number, r.title, r.status_id
+#   FROM uajs_requests.requests r
+#  WHERE r.title = 'Persistencia solicitud · evidencia 1'
+#  ORDER BY r.id DESC LIMIT 1;
+
+### P-DB-03 · El usuario de prueba existe en auth y tiene el rol STUDENT
+# SELECT u.id, u.email, r.name AS rol
+#   FROM uajs_auth.users u
+#   JOIN uajs_auth.user_roles ur ON ur.user_id = u.id
+#   JOIN uajs_auth.roles r ON r.id = ur.role_id
+#  WHERE u.email = 'estudiante.evidencia@uajs.edu';

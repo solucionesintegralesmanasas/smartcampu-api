@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: university-service
+  namespace: uajs-smart-campus
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: university-service }
+  template:
+    metadata:
+      labels: { app: university-service }
+    spec:
+      containers:
+        - name: university-service
+          image: uajs-base:latest
+          command: ['node', 'apps/university-service/src/server.js']
+          ports:
+            - containerPort: 3004
+          envFrom:
+            - configMapRef: { name: uajs-shared-config }
+          env:
+            - name: PORT
+              value: '3004'
+            - name: MYSQL_DATABASE
+              value: 'uajs_academic'
+            - name: MYSQL_PASSWORD
+              valueFrom: { secretKeyRef: { name: uajs-shared-secrets, key: MYSQL_PASSWORD } }
+            - name: SERVICE_AUTH_TOKEN
+              valueFrom: { secretKeyRef: { name: uajs-shared-secrets, key: SERVICE_AUTH_TOKEN } }
+          readinessProbe:
+            httpGet: { path: /api/v1/university/health, port: 3004 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /api/v1/university/health, port: 3004 }
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: university-service
+  namespace: uajs-smart-campus
+spec:
+  selector: { app: university-service }
+  ports:
+    - port: 3004
+      targetPort: 3004

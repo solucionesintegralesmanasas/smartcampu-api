@@ -1,0 +1,77 @@
+openapi: 3.0.0
+info:
+  title: PQRS Service API
+  version: 1.0.0
+  description: >
+    Peticiones, Quejas, Reclamos y Sugerencias con radicación anónima
+    opcional, plazo de respuesta por tipo, respuestas oficiales del personal
+    y auditoría inmutable de cada transición. Flujo: pending -> in_review ->
+    responded -> closed.
+servers:
+  - url: /api/v1/pqrs
+paths:
+  /health:
+    get: { summary: Health check, responses: { '200': { description: Service status } } }
+  /tipos:
+    get: { summary: List PQRS types, responses: { '200': { description: Paginated list } } }
+    post: { summary: Create a PQRS type (admin/staff only), responses: { '201': { description: Created }, '409': { description: Code already exists } } }
+  /tipos/{id}:
+    get: { summary: Get by id, parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: Found } } }
+    put: { summary: Update (admin/staff only), responses: { '200': { description: Updated } } }
+    delete: { summary: Delete (admin/staff only, blocked if it has active PQRS records), responses: { '200': { description: Deleted }, '409': { description: Has active PQRS } } }
+  /estados:
+    get: { summary: List PQRS statuses, responses: { '200': { description: Paginated list } } }
+    post: { summary: Create a status (admin/staff only), responses: { '201': { description: Created } } }
+  /estados/{id}:
+    get: { summary: Get by id, parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: Found } } }
+    delete: { summary: Delete (admin/staff only, blocked if assigned to active PQRS), responses: { '200': { description: Deleted }, '409': { description: Assigned to active PQRS } } }
+  '':
+    get:
+      summary: List PQRS. Regular users only see their own (non-anonymous) submissions; admin/staff see all.
+      parameters:
+        - { name: statusId, in: query, schema: { type: integer } }
+        - { name: typeId, in: query, schema: { type: integer } }
+        - { name: assigneeUuid, in: query, schema: { type: string, format: uuid } }
+      responses: { '200': { description: Paginated list } }
+    post:
+      summary: >
+        File a PQRS (ticket). Set isAnonymous=true to omit the requester's
+        identity from the record and its audit trail entirely. Due date is
+        computed from the type's SLA.
+      responses: { '201': { description: Created }, '404': { description: PQRS type not found } }
+  /rastrear/{ticketNumber}:
+    get:
+      summary: >
+        Look up a PQRS by its ticket number, with no ownership check — the
+        ticket number itself is the credential. This is how the submitter of
+        an anonymous PQRS can track its status.
+      parameters: [{ name: ticketNumber, in: path, required: true, schema: { type: string } }]
+      responses: { '200': { description: Found }, '404': { description: Not found } }
+  /{id}:
+    get:
+      summary: Get a PQRS by id (owner, assignee or admin/staff only — not usable for anonymous submissions, use /rastrear instead)
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { '200': { description: Found }, '403': { description: Not authorized } }
+  /{id}/historial:
+    get: { summary: Get the immutable status-transition audit trail, responses: { '200': { description: List of transitions } } }
+  /{id}/respuestas:
+    get: { summary: List official responses, responses: { '200': { description: List } } }
+  /{id}/en-revision:
+    post: { summary: Start review, assigning the PQRS to the acting staff member (admin/staff only), responses: { '200': { description: In review }, '409': { description: Not in pending status } } }
+  /{id}/responder:
+    post:
+      summary: Post the official response to a PQRS (admin/staff only). Transitions to responded.
+      requestBody: { content: { application/json: { schema: { type: object, required: [body], properties: { body: { type: string } } } } } }
+      responses: { '200': { description: Responded }, '409': { description: Not in pending/in_review } }
+  /{id}/cerrar:
+    post: { summary: Close a responded PQRS (admin/staff only), responses: { '200': { description: Closed }, '409': { description: Not responded } } }
+  /{pqrsId}/adjuntos:
+    get: { summary: List attachments, responses: { '200': { description: List } } }
+    post:
+      summary: >
+        Attach an existing storage-service file (by its numeric id) to this
+        PQRS. Validates the file exists and belongs to the uploader (or
+        that the uploader is admin/staff) before linking it.
+      responses: { '201': { description: Attached }, '404': { description: File not found or not accessible } }
+  /{pqrsId}/adjuntos/{id}:
+    delete: { summary: Remove own attachment (or admin/staff), responses: { '200': { description: Removed } } }

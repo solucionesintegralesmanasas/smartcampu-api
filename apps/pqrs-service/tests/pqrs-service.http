@@ -1,0 +1,202 @@
+### ============================================
+### PQRS SERVICE - Pruebas de endpoints (vía API Gateway)
+### Puerto interno: 3010 | Prefijo gateway: /api/v1/pqrs -> /api/v1/pqrs
+### Base de datos: uajs_pqrs (pqrs, pqrs_types, pqrs_statuses, pqrs_responses,
+### pqrs_attachments, pqrs_audit_trail)
+### Flujo: pending -> in_review -> responded -> closed
+### ============================================
+
+@gateway = http://localhost:3000
+@direct = http://localhost:3010
+@contentType = application/json
+@adminEmail = evidencia.qa@uajs.edu
+@adminPassword = EvidenciaQA.2026
+@campusUuid = PEGA_UUID_DE_LA_SEDE_PRINCIPAL
+@ticketNumber = PQRS-2026-000001
+@fileId = 1
+
+### ============================================
+### PREREQUISITOS
+### 1) SUPERADMIN asignado (ver user-service.http) y LOGIN ejecutado.
+### 2) Tipos semilla: PETICION, QUEJA, RECLAMO, SUGERENCIA, FELICITACION (SLA 15 días).
+### 3) UUID de la sede: SELECT uuid FROM uajs_academic.campuses WHERE is_main = 1;
+### 4) @ticketNumber: el número que devuelve la radicación (campo ticket_number).
+### ============================================
+
+### HEALTH CHECK
+GET {{direct}}/api/v1/pqrs/health
+
+### LOGIN
+# @name login
+POST {{gateway}}/api/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+### ============================================
+### TIPOS DE PQRS  (pqrs_types)
+### ============================================
+
+### Listar tipos (semilla) -> 200
+GET {{gateway}}/api/v1/pqrs/tipos?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Crear tipo de prueba -> 201
+# @name createTipo
+POST {{gateway}}/api/v1/pqrs/tipos
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "code": "QA_TIPO",
+  "name": "Tipo QA",
+  "description": "Tipo de PQRS para pruebas",
+  "slaDays": 10
+}
+
+### Actualizar SLA -> 200
+PUT {{gateway}}/api/v1/pqrs/tipos/{{createTipo.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "slaDays": 12
+}
+
+### ============================================
+### ESTADOS  (pqrs_statuses, semilla)
+### ============================================
+
+GET {{gateway}}/api/v1/pqrs/estados?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ============================================
+### PQRS  (pqrs)
+### Nota: la radicación exige autenticación aunque la PQRS sea anónima.
+### ============================================
+
+### Radicar PQRS identificada -> 201 (ticket PQRS-AAAA-NNNNNN, due_date = hoy + SLA)
+# @name createPqrs
+POST {{gateway}}/api/v1/pqrs
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "typeId": {{createTipo.response.body.data.id}},
+  "subject": "Queja de prueba QA",
+  "description": "Descripción detallada de la queja de prueba",
+  "isAnonymous": false,
+  "contactEmail": "qa@uajs.edu.co",
+  "campusUuid": "{{campusUuid}}",
+  "campusName": "Sede Principal"
+}
+
+### Radicar PQRS anónima -> 201 (requester_uuid y requester_name quedan en NULL)
+# @name createPqrsAnonima
+POST {{gateway}}/api/v1/pqrs
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "typeId": {{createTipo.response.body.data.id}},
+  "subject": "Sugerencia anónima QA",
+  "description": "Propuesta enviada sin identificación",
+  "isAnonymous": true
+}
+
+### Asunto demasiado corto -> 400 (min 3)
+POST {{gateway}}/api/v1/pqrs
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "typeId": {{createTipo.response.body.data.id}},
+  "subject": "ab",
+  "description": "Descripción válida"
+}
+
+### Listar PQRS (filtros statusId, typeId, assigneeUuid) -> 200
+GET {{gateway}}/api/v1/pqrs?page=1&limit=10&statusId=1
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Rastrear por número de radicado -> 200
+GET {{gateway}}/api/v1/pqrs/rastrear/{{ticketNumber}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Obtener PQRS -> 200
+GET {{gateway}}/api/v1/pqrs/{{createPqrs.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Pasar a revisión (ADMIN) -> 200
+POST {{gateway}}/api/v1/pqrs/{{createPqrs.response.body.data.id}}/en-revision
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Responder oficialmente (ADMIN) -> 200
+POST {{gateway}}/api/v1/pqrs/{{createPqrs.response.body.data.id}}/responder
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "body": "Respuesta oficial de prueba QA"
+}
+
+### Respuesta demasiado corta -> 400 (min 3)
+POST {{gateway}}/api/v1/pqrs/{{createPqrs.response.body.data.id}}/responder
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "body": "ab"
+}
+
+### Respuestas de la PQRS -> 200
+GET {{gateway}}/api/v1/pqrs/{{createPqrs.response.body.data.id}}/respuestas
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Cerrar (ADMIN) -> 200
+POST {{gateway}}/api/v1/pqrs/{{createPqrs.response.body.data.id}}/cerrar
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Historial de transiciones -> 200
+GET {{gateway}}/api/v1/pqrs/{{createPqrs.response.body.data.id}}/historial
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ============================================
+### ADJUNTOS  (pqrs_attachments -> storage)
+### fileId: id devuelto al subir el archivo en storage-service.http
+### ============================================
+
+### Adjuntar archivo -> 201
+# @name createAdjunto
+POST {{gateway}}/api/v1/pqrs/{{createPqrs.response.body.data.id}}/adjuntos
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "fileId": {{fileId}}
+}
+
+### Listar adjuntos -> 200
+GET {{gateway}}/api/v1/pqrs/{{createPqrs.response.body.data.id}}/adjuntos
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Eliminar adjunto -> 200
+DELETE {{gateway}}/api/v1/pqrs/{{createPqrs.response.body.data.id}}/adjuntos/{{createAdjunto.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ============================================
+### LIMPIEZA
+### Las PQRS tienen auditoría y no se borran. Solo se elimina el tipo de prueba
+### si no tiene PQRS asociadas.
+### ============================================
+DELETE {{gateway}}/api/v1/pqrs/tipos/{{createTipo.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ============================================
+### VERIFICACIÓN EN BD
+### SELECT id, ticket_number, is_anonymous, requester_uuid, due_date, status_id FROM uajs_pqrs.pqrs ORDER BY id DESC LIMIT 5;
+### SELECT pqrs_id, from_status_id, to_status_id, actor_name FROM uajs_pqrs.pqrs_audit_trail ORDER BY id DESC LIMIT 10;
+### ============================================

@@ -1,0 +1,40 @@
+### ============================================================================
+### EVIDENCIA 1 · COLECCIÓN REST CLIENT · 00 · PREPARACIÓN
+### ----------------------------------------------------------------------------
+### Casos: CP-INF-06, CP-INF-07, CP-AUT-04 (login de administrador).
+### Ejecutar primero. Las demás carpetas de esta evidencia son independientes
+### y vuelven a iniciar sesión, pero este archivo verifica el entorno.
+###
+### Requiere: docker compose up (MySQL 3307, Redis 6379, ES 9200), los 12
+### servicios levantados y el usuario evidencia.qa@uajs.edu con rol SUPERADMIN.
+### ============================================================================
+
+@gateway = http://localhost:3000
+@contentType = application/json
+@adminEmail = evidencia.qa@uajs.edu
+@adminPassword = EvidenciaQA.2026
+
+
+### PRE-01 · Liveness del gateway · CP-INF-06 · esperado 200
+GET {{gateway}}/health/liveness
+
+
+### PRE-02 · Readiness (MySQL, Redis, Elasticsearch y servicios) · CP-INF-06 · esperado 200
+GET {{gateway}}/health/readiness
+
+
+### PRE-03 · Login de administrador · CP-AUT-04 · esperado 200 con accessToken
+# @name login
+POST {{gateway}}/api/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+
+### PRE-04 · Verificación de sesión · esperado 200 con el perfil del administrador
+### Verificación en base de datos: 00-preparacion.sql (bloques PRE-04).
+GET {{gateway}}/api/v1/usuarios/perfil
+Authorization: Bearer {{login.response.body.data.accessToken}}

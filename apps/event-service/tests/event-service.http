@@ -1,0 +1,221 @@
+### ============================================
+### EVENT SERVICE - Pruebas de endpoints (vía API Gateway)
+### Puerto interno: 3008 | Prefijo gateway: /api/v1/eventos -> /api/v1/events
+### Base de datos: uajs_events (events, event_categories, event_statuses, event_registrations)
+### Flujo del evento: draft -> published -> ongoing -> completed | cancelled
+### ============================================
+
+@gateway = http://localhost:3000
+@direct = http://localhost:3008
+@contentType = application/json
+@adminEmail = evidencia.qa@uajs.edu
+@adminPassword = EvidenciaQA.2026
+@campusUuid = e5c4aa33-cbe5-11f1-9d9d-4e6483f921e9
+@inscriptionId = 1
+
+### ============================================
+### PREREQUISITOS
+### 1) SUPERADMIN asignado (ver user-service.http) y LOGIN ejecutado.
+### 2) UUID de la sede: SELECT uuid FROM uajs_academic.campuses WHERE is_main = 1;
+### 3) Para probar el aforo (maxCapacity = 2) se necesitan al menos 3 usuarios distintos.
+### ============================================
+
+### HEALTH CHECK
+GET {{direct}}/api/v1/events/health
+
+### LOGIN
+# @name login
+POST {{gateway}}/api/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+### ============================================
+### CATEGORÍAS  (event_categories)
+### ============================================
+
+### Crear categoría -> 201
+# @name createCategoria
+POST {{gateway}}/api/v1/eventos/categorias
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "code": "QA_EVT",
+  "name": "Evento QA",
+  "colorHex": "#8B5CF6",
+  "icon": "flask"
+}
+
+### Color inválido -> 400 (regex #RRGGBB)
+POST {{gateway}}/api/v1/eventos/categorias
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "code": "QA_BAD",
+  "name": "Color inválido",
+  "colorHex": "morado"
+}
+
+### Listar categorías -> 200
+GET {{gateway}}/api/v1/eventos/categorias?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Actualizar categoría -> 200
+PUT {{gateway}}/api/v1/eventos/categorias/{{createCategoria.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "name": "Evento QA actualizado"
+}
+
+### ============================================
+### ESTADOS  (event_statuses, semilla)
+### ============================================
+
+GET {{gateway}}/api/v1/eventos/estados?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ============================================
+### EVENTOS  (events)
+### ============================================
+
+### Crear evento (draft) -> 201
+# @name createEvento
+POST {{gateway}}/api/v1/eventos/eventos
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "categoryId": {{createCategoria.response.body.data.id}},
+  "campusUuid": "{{campusUuid}}",
+  "campusName": "Sede Principal",
+  "title": "Jornada de pruebas QA",
+  "description": "Evento creado desde pruebas",
+  "venue": "Auditorio A",
+  "startsAt": "2026-11-20T14:00:00",
+  "endsAt": "2026-11-20T16:00:00",
+  "maxCapacity": 2,
+  "cost": 0,
+  "requiresRegistration": true,
+  "registrationDeadline": "2026-11-18T23:59:00"
+}
+
+### Fin anterior al inicio -> 400 (CHECK ends_at > starts_at)
+POST {{gateway}}/api/v1/eventos/eventos
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "categoryId": {{createCategoria.response.body.data.id}},
+  "campusUuid": "{{campusUuid}}",
+  "campusName": "Sede Principal",
+  "title": "Fechas inválidas",
+  "startsAt": "2026-11-20T16:00:00",
+  "endsAt": "2026-11-20T14:00:00"
+}
+
+### Listar eventos filtrados por categoría -> 200
+GET {{gateway}}/api/v1/eventos/eventos?page=1&limit=10&categoryId={{createCategoria.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Obtener evento -> 200
+GET {{gateway}}/api/v1/eventos/eventos/{{createEvento.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Actualizar evento (draft) -> 200
+PUT {{gateway}}/api/v1/eventos/eventos/{{createEvento.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "venue": "Auditorio B",
+  "maxCapacity": 2
+}
+
+### Publicar (abre inscripciones) -> 200
+POST {{gateway}}/api/v1/eventos/eventos/{{createEvento.response.body.data.id}}/publicar
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ============================================
+### INSCRIPCIONES  (event_registrations)
+### UK (event_id, registrant_uuid): una persona no se inscribe dos veces.
+### ============================================
+
+### Inscribirse -> 201 (confirmed o waitlisted según aforo)
+POST {{gateway}}/api/v1/eventos/eventos/{{createEvento.response.body.data.id}}/inscripciones
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Inscribirse de nuevo con el mismo usuario -> 409
+POST {{gateway}}/api/v1/eventos/eventos/{{createEvento.response.body.data.id}}/inscripciones
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Mis inscripciones -> 200
+GET {{gateway}}/api/v1/eventos/eventos/{{createEvento.response.body.data.id}}/inscripciones/mia
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Listado de inscritos (ADMIN) -> 200
+GET {{gateway}}/api/v1/eventos/eventos/{{createEvento.response.body.data.id}}/inscripciones?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Cancelar mi inscripción -> 200
+POST {{gateway}}/api/v1/eventos/eventos/{{createEvento.response.body.data.id}}/inscripciones/cancelar
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Check-in (ADMIN) -> 200. Reemplazar @inscriptionId por un id confirmado del listado.
+POST {{gateway}}/api/v1/eventos/eventos/{{createEvento.response.body.data.id}}/inscripciones/{{inscriptionId}}/check-in
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ============================================
+### TRANSICIONES DEL EVENTO (ADMIN u organizador)
+### ============================================
+
+### Iniciar -> 200 (ongoing)
+POST {{gateway}}/api/v1/eventos/eventos/{{createEvento.response.body.data.id}}/iniciar
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Completar -> 200 (completed)
+POST {{gateway}}/api/v1/eventos/eventos/{{createEvento.response.body.data.id}}/completar
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ---- Evento para probar cancelación ----
+# @name createEventoCancelar
+POST {{gateway}}/api/v1/eventos/eventos
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "categoryId": {{createCategoria.response.body.data.id}},
+  "campusUuid": "{{campusUuid}}",
+  "campusName": "Sede Principal",
+  "title": "Evento para cancelar",
+  "startsAt": "2026-12-01T14:00:00",
+  "endsAt": "2026-12-01T16:00:00"
+}
+
+### Cancelar evento -> 200 (cancelled, estado final)
+POST {{gateway}}/api/v1/eventos/eventos/{{createEventoCancelar.response.body.data.id}}/cancelar
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Eliminar evento de prueba (soft delete) -> 200
+DELETE {{gateway}}/api/v1/eventos/eventos/{{createEventoCancelar.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ============================================
+### LIMPIEZA
+### Los eventos con inscripciones no se borran físicamente. Solo se elimina la categoría
+### de prueba si no tiene eventos asociados.
+### ============================================
+DELETE {{gateway}}/api/v1/eventos/categorias/{{createCategoria.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ============================================
+### VERIFICACIÓN EN BD
+### SELECT id, title, status_id, max_capacity FROM uajs_events.events ORDER BY id DESC LIMIT 5;
+### SELECT event_id, registrant_name, status, attended_at FROM uajs_events.event_registrations ORDER BY id DESC LIMIT 10;
+### ============================================

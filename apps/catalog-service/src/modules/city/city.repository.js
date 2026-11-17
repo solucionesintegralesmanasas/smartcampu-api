@@ -70,11 +70,11 @@ class CityRepository {
     return rows;
   }
 
-  async findByName(name) {
+  async findByName(name, stateId) {
     const pool = await this.getPool();
     const rows = await pool.query(
-      'SELECT id, uuid, name, dane_code AS daneCode, state_id AS stateId, is_active AS active, created_at, updated_at FROM cities WHERE name = ? AND is_active = ?',
-      [name, 1],
+      'SELECT id, uuid, name, dane_code AS daneCode, state_id AS stateId, is_active AS active, created_at, updated_at FROM cities WHERE name = ? AND state_id = ? AND is_active = ?',
+      [name, stateId, 1],
     );
     return rows[0] || null;
   }
@@ -102,6 +102,15 @@ class CityRepository {
   async countAll() {
     const pool = await this.getPool();
     const rows = await pool.query('SELECT COUNT(*) AS total FROM cities WHERE is_active = ?', [1]);
+    return rows[0].total;
+  }
+
+  async countActiveCampuses(cityId) {
+    const pool = await this.getPool();
+    const rows = await pool.query(
+      'SELECT COUNT(*) AS total FROM sedes WHERE id_ciudad = ? AND activo = 1',
+      [cityId],
+    );
     return rows[0].total;
   }
 }

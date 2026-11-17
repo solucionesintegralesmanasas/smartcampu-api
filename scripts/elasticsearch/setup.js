@@ -93,7 +93,7 @@ async function setup() {
 async function status() {
   log.info('Estado de índices:');
 
-  const result = await client.cat.indices({
+  const result = await client.client.cat.indices({
     format: 'json',
     h: 'index,health,docs.count,store.size',
   });
@@ -122,9 +122,9 @@ async function deleteAll() {
 
   for (const { name } of INDICES) {
     try {
-      const exists = await client.indices.exists({ index: name });
+      const exists = await client.client.indices.exists({ index: name });
       if (exists) {
-        await client.indices.delete({ index: name });
+        await client.client.indices.delete({ index: name });
         log.success(`${name} eliminado`);
       }
     } catch (error) {

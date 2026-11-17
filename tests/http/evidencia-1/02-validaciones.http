@@ -1,0 +1,250 @@
+### ============================================================================
+### EVIDENCIA 1 · COLECCIÓN REST Client · 02 · VALIDACIONES Y NEGATIVOS
+### ----------------------------------------------------------------------------
+### Entradas inválidas, permisos insuficientes y reglas de negocio. Cada
+### bloque indica el código esperado y el caso del plan (CP-…).
+###
+### PRECONDICIÓN: el estudiante estudiante.evidencia@uajs.edu debe existir
+### (se crea en 01-exitosas.http, CP-AUT-01).
+### La franja de conflicto usa @slotDate. Si se repite la ejecución, cambiar
+### la fecha porque la reserva de CP-VAL-R02 ya quedó registrada.
+### ============================================================================
+
+@gateway = http://localhost:3000
+@contentType = application/json
+@adminEmail = evidencia.qa@uajs.edu
+@adminPassword = EvidenciaQA.2026
+@estudianteEmail = estudiante.evidencia@uajs.edu
+@estudiantePassword = EstudianteQA.2026
+@slotDate = 2027-01-29
+@resourceId = 1
+@tipoReservaId = 1
+@recursoInexistente = 999999
+
+
+### ============================================================================
+### A · AUTENTICACIÓN
+### ============================================================================
+
+### CP-AUT-02 · Registrar un email ya existente · esperado 409
+POST {{gateway}}/api/v1/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "{{adminEmail}}",
+  "password": "OtraClave.2026",
+  "firstName": "Duplicado",
+  "lastName": "QA",
+  "documentTypeCode": "CC",
+  "documentNumber": "5550001111"
+}
+
+### CP-AUT-02b · Documento ya registrado con otro email · esperado 409
+### DEFECTO ABIERTO: responde 500 (Duplicate entry en uq_persons_document).
+### Se deja con el resultado esperado para que el fallo quede en evidencia.
+POST {{gateway}}/api/v1/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "otro.documento.evidencia@uajs.edu",
+  "password": "Prueba.2026",
+  "firstName": "Documento",
+  "lastName": "Repetido",
+  "documentTypeCode": "CC",
+  "documentNumber": "1098000111"
+}
+
+### CP-AUT-03 · Registro con cuerpo incompleto (sin email ni password) · esperado 400
+POST {{gateway}}/api/v1/auth/register
+Content-Type: {{contentType}}
+
+{
+  "firstName": "Incompleto",
+  "lastName": "QA"
+}
+
+### CP-AUT-03 · Registro con email con formato inválido · esperado 400
+POST {{gateway}}/api/v1/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "no-es-un-correo",
+  "password": "Prueba.2026",
+  "firstName": "Formato",
+  "lastName": "Invalido",
+  "documentTypeCode": "CC",
+  "documentNumber": "5550002222"
+}
+
+### CP-AUT-05 · Login con contraseña incorrecta · esperado 401
+POST {{gateway}}/api/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{adminEmail}}",
+  "password": "ClaveIncorrecta.2026"
+}
+
+### CP-AUT-05 · Login con usuario inexistente · esperado 401
+POST {{gateway}}/api/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "nadie.evidencia@uajs.edu",
+  "password": "ClaveIncorrecta.2026"
+}
+
+### CP-AUT-04 · Login del estudiante para las pruebas de rol · esperado 200
+# @name loginEstudiante
+POST {{gateway}}/api/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{estudianteEmail}}",
+  "password": "{{estudiantePassword}}"
+}
+
+### Login del administrador (token para los negativos con rol)
+# @name login
+POST {{gateway}}/api/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+
+### ============================================================================
+### B · GATEWAY
+### ============================================================================
+
+### CP-GW-01 · Ruta protegida sin cabecera Authorization · esperado 401
+GET {{gateway}}/api/v1/universidad/sedes
+
+### CP-GW-02 · Token con firma inválida · esperado 401
+GET {{gateway}}/api/v1/usuarios/usuarios
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.firmaFalsa
+
+### CP-GW-02 · Esquema de autorización incorrecto (Basic en lugar de Bearer) · esperado 401
+GET {{gateway}}/api/v1/universidad/sedes
+Authorization: Basic dXN1YXJpbzpjbGF2ZQ==
+
+### CP-GW-03 · Ruta inexistente con token válido · esperado 404
+GET {{gateway}}/api/v1/ruta-inexistente
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+
+### ============================================================================
+### C · AUTORIZACIÓN POR ROL
+### ============================================================================
+
+### CP-AUZ-01 · Estudiante consulta un listado administrativo · esperado 403
+GET {{gateway}}/api/v1/usuarios/usuarios?page=1&limit=10
+Authorization: Bearer {{loginEstudiante.response.body.data.accessToken}}
+
+### CP-EVT-05 · Estudiante intenta el check-in de una inscripción · esperado 403
+POST {{gateway}}/api/v1/eventos/eventos/1/inscripciones/1/check-in
+Authorization: Bearer {{loginEstudiante.response.body.data.accessToken}}
+
+### CP-EVT-05 · Estudiante consulta todas las inscripciones del evento · esperado 403
+GET {{gateway}}/api/v1/eventos/eventos/1/inscripciones?page=1&limit=10
+Authorization: Bearer {{loginEstudiante.response.body.data.accessToken}}
+
+
+### ============================================================================
+### D · RESERVAS: VALIDACIÓN DE DATOS Y REGLAS DE NEGOCIO
+### ============================================================================
+
+### CP-RES-02 (paso 1) · Reserva base en franja libre · esperado 201
+# @name reservaBase
+POST {{gateway}}/api/v1/reservas/reservas
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "bookingTypeId": {{tipoReservaId}},
+  "resourceId": {{resourceId}},
+  "title": "Reserva base para conflicto",
+  "bookingDate": "{{slotDate}}",
+  "startTime": "10:00",
+  "endTime": "11:00",
+  "expectedAttendees": 5
+}
+
+### CP-RES-02 (paso 2) · Reserva superpuesta en el mismo recurso · esperado 409
+POST {{gateway}}/api/v1/reservas/reservas
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "bookingTypeId": {{tipoReservaId}},
+  "resourceId": {{resourceId}},
+  "title": "Intento solapado",
+  "bookingDate": "{{slotDate}}",
+  "startTime": "10:30",
+  "endTime": "11:30"
+}
+
+### CP-VAL-R01 · Hora de fin anterior a la de inicio · esperado 400
+POST {{gateway}}/api/v1/reservas/reservas
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "bookingTypeId": {{tipoReservaId}},
+  "resourceId": {{resourceId}},
+  "title": "Horario invertido",
+  "bookingDate": "{{slotDate}}",
+  "startTime": "11:00",
+  "endTime": "09:00"
+}
+
+### CP-VAL-R02 · Falta el campo obligatorio resourceId · esperado 400
+POST {{gateway}}/api/v1/reservas/reservas
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "bookingTypeId": {{tipoReservaId}},
+  "title": "Sin recurso",
+  "bookingDate": "{{slotDate}}",
+  "startTime": "08:00",
+  "endTime": "09:00"
+}
+
+### CP-RES-03 · Recurso inexistente · esperado 404
+POST {{gateway}}/api/v1/reservas/reservas
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "bookingTypeId": {{tipoReservaId}},
+  "resourceId": {{recursoInexistente}},
+  "title": "Recurso fantasma",
+  "bookingDate": "{{slotDate}}",
+  "startTime": "08:00",
+  "endTime": "09:00"
+}
+
+
+### ============================================================================
+### E · EVENTOS: REGLAS DE INSCRIPCIÓN
+### ============================================================================
+
+### CP-EVT-02 · Inscripción duplicada (mismo evento, mismo estudiante) · esperado 409
+### PRECONDICIÓN: el evento 1 debe estar PUBLICADO y CP-EVT-01 aprobado. Si el
+### evento no está publicado, el 409 que devuelve la API es por esa regla y NO
+### prueba la duplicidad: en ese caso el resultado no es válido.
+POST {{gateway}}/api/v1/eventos/eventos/1/inscripciones
+Authorization: Bearer {{loginEstudiante.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+### CP-EVT-04 · Cancelar una inscripción inexistente o ya cancelada · esperado 404 o 409
+POST {{gateway}}/api/v1/eventos/eventos/1/inscripciones/cancelar
+Authorization: Bearer {{loginEstudiante.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+### CP-PQR-02 · Radicado inexistente · esperado 404
+GET {{gateway}}/api/v1/pqrs/999999
+Authorization: Bearer {{login.response.body.data.accessToken}}

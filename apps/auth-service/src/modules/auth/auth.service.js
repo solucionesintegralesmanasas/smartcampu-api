@@ -9,6 +9,12 @@ const { env } = require('../../config/env');
 const logger = require('../../config/logger');
 const { UnauthorizedError, ConflictError } = require('../../core/exceptions');
 
+// Hash bcrypt válido y fijo (no corresponde a ninguna contraseña real), usado
+// solo para igualar el costo de tiempo de bcrypt.compare cuando el usuario no
+// existe. Sin esto, "usuario no existe" responde antes que "password
+// incorrecta" y un atacante puede enumerar correos registrados por temporización.
+const DUMMY_PASSWORD_HASH = '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW';
+
 /**
  * Servicio de autenticación con lógica de negocio y registro de eventos en ES.
  */
@@ -52,24 +58,18 @@ class AuthService {
 
   async login(loginDto, req) {
     const user = await this.authRepository.findByEmail(loginDto.email);
-    if (!user) {
-      await this.logAuthEvent('login_failed', {
-        email: loginDto.email,
-        ipAddress: req.ip,
-        userAgent: req.headers['user-agent'],
-        status: 'user_not_found',
-      });
-      throw new UnauthorizedError('Credenciales inválidas');
-    }
 
-    const isValid = await bcrypt.compare(loginDto.password, user.password);
-    if (!isValid) {
+    // Siempre se ejecuta bcrypt.compare, exista o no el usuario (contra un
+    // hash fijo cuando no existe), para que ambas ramas cuesten lo mismo.
+    const isValid = await bcrypt.compare(loginDto.password, user ? user.password : DUMMY_PASSWORD_HASH);
+
+    if (!user || !isValid) {
       await this.logAuthEvent('login_failed', {
-        userId: user.id,
-        email: user.email,
+        userId: user ? user.id : undefined,
+        email: user ? user.email : loginDto.email,
         ipAddress: req.ip,
         userAgent: req.headers['user-agent'],
-        status: 'invalid_password',
+        status: user ? 'invalid_password' : 'user_not_found',
       });
       throw new UnauthorizedError('Credenciales inválidas');
     }
@@ -80,26 +80,33 @@ class AuthService {
     const accessToken = jwt.sign(
       {
         sub: user.id,
+        uuid: user.uuid,
         cedula: user.cedula || null,
         nombre: user.nombre || null,
         correo: user.email,
         rol: (user.roles && user.roles[0]) || null,
+        // api-gateway (auth.middleware.js) exige un array `roles` para
+        // autorizar el token; `rol` (singular) se conserva solo por
+        // compatibilidad con el resto del payload.
+        roles: user.roles || [],
         modulos,
       },
       env.JWT_SECRET,
       { expiresIn: env.JWT_EXPIRES_IN },
     );
 
-    const refreshToken = jwt.sign({ sub: user.id }, env.JWT_REFRESH_SECRET || env.JWT_SECRET, {
+    // `jti` garantiza unicidad: sin él el payload es solo {sub, iat, exp} con
+    // iat en segundos, así que dos tokens emitidos en el mismo segundo son
+    // bytes idénticos y el UNIQUE de refresh_tokens.token_hash respondía
+    // 500 Duplicate entry (DEF-02 corregido).
+    const refreshToken = jwt.sign({ sub: user.id, jti: uuidv4() }, env.JWT_REFRESH_SECRET, {
       expiresIn: env.JWT_REFRESH_EXPIRES_IN,
     });
 
-    await this.authRepository.updateRefreshToken(
-      user.id,
-      refreshToken,
-      req.headers['user-agent'],
-      req.ip,
-    );
+    await this.authRepository.createRefreshToken(user.id, refreshToken, {
+      deviceInfo: req.headers['user-agent'],
+      ipAddress: req.ip,
+    });
 
     await this.logAuthEvent('user_logged_in', {
       userId: user.id,
@@ -150,7 +157,10 @@ class AuthService {
       throw new UnauthorizedError('Token de renovación inválido');
     }
 
-    await this.authRepository.invalidateRefreshTokens(user.id);
+    // Revoca solo la sesión/dispositivo del token presentado, no todas las
+    // sesiones del usuario (de lo contrario cerrar sesión en un dispositivo
+    // desconectaría también todos los demás dispositivos del usuario).
+    await this.authRepository.revokeRefreshTokenByHash(logoutDto.refreshToken, 'logout');
 
     await this.logAuthEvent('user_logged_out', {
       userId: user.id,
@@ -163,18 +173,42 @@ class AuthService {
     return { message: 'Sesión cerrada exitosamente' };
   }
 
-  async refreshToken(refreshTokenDto) {
-    const user = await this.authRepository.findByRefreshToken(refreshTokenDto.refreshToken);
-    if (!user) {
-      await this.logAuthEvent('refresh_failed', { status: 'invalid_token' });
+  async refreshToken(refreshTokenDto, req) {
+    const record = await this.authRepository.findRefreshTokenRecord(refreshTokenDto.refreshToken);
+    if (!record) {
+      await this.logAuthEvent('refresh_failed', { status: 'unknown_token' });
       throw new UnauthorizedError('Token de renovación inválido');
     }
 
-    try {
-      jwt.verify(refreshTokenDto.refreshToken, env.JWT_REFRESH_SECRET || env.JWT_SECRET);
-    } catch (error) {
-      await this.logAuthEvent('refresh_failed', { userId: user.id, status: 'expired_token' });
+    if (record.revokedAt) {
+      // El token ya fue usado (rotado) o cerrado antes: si vuelve a
+      // presentarse, es un indicio de robo. Se revoca toda la familia de
+      // tokens del dispositivo/sesión para forzar un nuevo login.
+      await this.authRepository.revokeRefreshTokenFamily(record.familyId, 'theft');
+      await this.logAuthEvent('refresh_reuse_detected', {
+        userId: record.userId,
+        familyId: record.familyId,
+        status: 'theft_suspected',
+      });
+      throw new UnauthorizedError('Token de renovación inválido');
+    }
+
+    if (record.expiresAt < new Date()) {
+      await this.logAuthEvent('refresh_failed', { userId: record.userId, status: 'expired_token' });
       throw new UnauthorizedError('Token de renovación expirado');
+    }
+
+    try {
+      jwt.verify(refreshTokenDto.refreshToken, env.JWT_REFRESH_SECRET);
+    } catch (error) {
+      await this.logAuthEvent('refresh_failed', { userId: record.userId, status: 'invalid_signature' });
+      throw new UnauthorizedError('Token de renovación inválido');
+    }
+
+    const user = await this.authRepository.findById(record.userId);
+    if (!user) {
+      await this.logAuthEvent('refresh_failed', { userId: record.userId, status: 'user_not_found' });
+      throw new UnauthorizedError('Token de renovación inválido');
     }
 
     const permisos = await this.authRepository.findPermissions(user.roles || []);
@@ -183,19 +217,34 @@ class AuthService {
     const accessToken = jwt.sign(
       {
         sub: user.id,
+        uuid: user.uuid,
         cedula: user.cedula || null,
         nombre: user.nombre || null,
         correo: user.email,
         rol: (user.roles && user.roles[0]) || null,
+        roles: user.roles || [],
         modulos,
       },
       env.JWT_SECRET,
       { expiresIn: env.JWT_EXPIRES_IN },
     );
 
+    const newRefreshToken = jwt.sign({ sub: user.id, jti: uuidv4() }, env.JWT_REFRESH_SECRET, {
+      expiresIn: env.JWT_REFRESH_EXPIRES_IN,
+    });
+
+    // Rotación: se revoca el token usado y se emite uno nuevo en la misma
+    // familia, para poder detectar un reuso posterior (robo) del anterior.
+    await this.authRepository.revokeRefreshTokenById(record.id, 'rotation');
+    await this.authRepository.createRefreshToken(user.id, newRefreshToken, {
+      deviceInfo: req?.headers?.['user-agent'],
+      ipAddress: req?.ip,
+      familyId: record.familyId,
+    });
+
     await this.logAuthEvent('token_refreshed', { userId: user.id, status: 'success' });
 
-    return { accessToken, expiresIn: env.JWT_EXPIRES_IN };
+    return { accessToken, refreshToken: newRefreshToken, expiresIn: env.JWT_EXPIRES_IN };
   }
 
   async requestPasswordReset(email) {
@@ -248,17 +297,27 @@ class AuthService {
   }
 
   async logAuthEvent(eventType, metadata) {
+    const indexPromise = esClient.index({
+      index: env.AUTH_EVENTS_INDEX,
+      document: {
+        '@timestamp': new Date().toISOString(),
+        eventType,
+        service: 'auth-service',
+        correlationId: metadata.correlationId || uuidv4(),
+        ...metadata,
+      },
+    });
+
+    const timeoutPromise = new Promise((resolve) => {
+      setTimeout(() => resolve({ __timedOut: true }), 2000);
+    });
+
     try {
-      await esClient.index({
-        index: env.AUTH_EVENTS_INDEX,
-        document: {
-          '@timestamp': new Date().toISOString(),
-          eventType,
-          service: 'auth-service',
-          correlationId: metadata.correlationId || uuidv4(),
-          ...metadata,
-        },
-      });
+      const result = await Promise.race([indexPromise, timeoutPromise]);
+      if (result && result.__timedOut) {
+        logger.warn('Timed out logging auth event to ES', { eventType });
+        indexPromise.catch(() => {});
+      }
     } catch (error) {
       logger.warn('Failed to log auth event to ES', { eventType, error: error.message });
     }

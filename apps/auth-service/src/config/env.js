@@ -7,16 +7,12 @@ const { z } = require('zod');
 dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
 
 const EnvSchema = z.object({
-  NODE_ENV: z.enum(['development', 'staging', 'production']).default('development'),
+  NODE_ENV: z.enum(['development', 'staging', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(3001),
   JWT_SECRET: z.string().min(64, 'JWT_SECRET debe tener al menos 64 caracteres'),
   JWT_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
-  JWT_REFRESH_SECRET: z
-    .string()
-    .min(64)
-    .optional()
-    .transform((val) => val || undefined),
+  JWT_REFRESH_SECRET: z.string().min(64, 'JWT_REFRESH_SECRET debe tener al menos 64 caracteres'),
   BCRYPT_ROUNDS: z.coerce.number().int().min(10).max(14)
     .default(12),
   MYSQL_HOST: z.string().default('mysql'),
@@ -30,6 +26,13 @@ const EnvSchema = z.object({
   ELASTICSEARCH_PORT: z.coerce.number().int().positive().default(9200),
   EMAIL_QUEUE: z.string().default('auth_emails'),
   AUTH_EVENTS_INDEX: z.string().default('uajs_auth_events'),
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_SECURE: z.coerce.boolean().default(false),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASSWORD: z.string().optional(),
+  SMTP_FROM: z.string().default('UAJS Smart Campus <no-reply@uajs.edu>'),
+  PASSWORD_RESET_URL_BASE: z.string().default('http://localhost:3000/reset-password'),
 });
 
 module.exports = { env: EnvSchema.parse(process.env) };

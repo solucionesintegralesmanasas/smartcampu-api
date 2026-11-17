@@ -2,7 +2,7 @@ const testEnv = {
   NODE_ENV: 'test',
   PORT: '3001',
   JWT_SECRET: 'test_secret_key_min_64_characters_long_for_jwt_security_purposes_here',
-  JWT_REFRESH_SECRET: '',
+  JWT_REFRESH_SECRET: 'test_refresh_secret_key_min_64_characters_long_for_jwt_purposes_here',
   JWT_EXPIRES_IN: '15m',
   JWT_REFRESH_EXPIRES_IN: '7d',
   BCRYPT_ROUNDS: '10',

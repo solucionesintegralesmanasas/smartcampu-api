@@ -25,6 +25,18 @@ class ElasticsearchClient {
     apiVersion = '8.12',
     maxRetries = 5,
     requestTimeout = 30000,
+    // Todos los métodos (search/index/get/...) pasan por el circuit
+    // breaker. Antes usaba el mismo `requestTimeout` (30s) que el cliente
+    // ES crudo, así que cualquier llamada síncrona en el camino de un
+    // request (p. ej. AuthService#logAuthEvent, SolicitudService#indexEntity
+    // en cada servicio) podía tardar hasta 30s en fallar cuando
+    // Elasticsearch está caído — casi indistinguible de un cuelgue real
+    // para quien espera esa respuesta HTTP. Se desacopla del
+    // `requestTimeout` del cliente (que sigue sirviendo para reintentos
+    // legítimos de queries lentas con ES arriba) y se usa el mismo límite
+    // corto (2s) ya establecido en el resto del código para dependencias
+    // que pueden estar caídas (ver health.middleware.js en api-gateway).
+    circuitBreakerTimeout = 2000,
     circuitBreakerThreshold = 50,
     circuitBreakerResetTimeout = 30000,
   } = {}) {
@@ -40,7 +52,7 @@ class ElasticsearchClient {
     this.breaker = new CircuitBreaker(
       async (method, params, opts) => this.client[method](params, opts),
       {
-        timeout: requestTimeout,
+        timeout: circuitBreakerTimeout,
         errorThresholdPercentage: circuitBreakerThreshold,
         resetTimeout: circuitBreakerResetTimeout,
       },
@@ -84,9 +96,6 @@ class ElasticsearchClient {
             ignore: [404],
           });
         } catch (error) {
-          if (this.breaker.open) {
-            return this.client[method](params, opts);
-          }
           throw this._enhanceError(error, method, params, requestId);
         }
       };
@@ -123,7 +132,7 @@ class ElasticsearchClient {
   }
 
   async createIndex(index, body) {
-    const exists = await this.indices.exists({ index });
+    const exists = await this.client.indices.exists({ index });
     if (!exists) {
       await this.client.indices.create({ index, body });
       return { created: true, index };

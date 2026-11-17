@@ -1,0 +1,44 @@
+openapi: 3.0.0
+info:
+  title: Notification Service API
+  version: 1.0.0
+  description: >
+    Notificaciones in-app generadas a partir de eventos de dominio de
+    booking/request/event/pqrs-service (vía una cola BullMQ compartida),
+    más plantillas, preferencias de canal por usuario y suscripciones push.
+servers:
+  - url: /api/v1/notifications
+paths:
+  /health:
+    get: { summary: Health check, responses: { '200': { description: Service status } } }
+  /plantillas:
+    get: { summary: List templates (admin/staff only), responses: { '200': { description: Paginated list } } }
+    post: { summary: Create a template (admin/staff only), responses: { '201': { description: Created }, '409': { description: code+channel already exists } } }
+  /plantillas/{id}:
+    get: { summary: Get by id (admin/staff only), parameters: [{ name: id, in: path, required: true, schema: { type: integer } }], responses: { '200': { description: Found } } }
+    put: { summary: Update (admin/staff only), responses: { '200': { description: Updated } } }
+    delete: { summary: Delete (admin/staff only), responses: { '200': { description: Deleted } } }
+  /preferencias:
+    get: { summary: Get my channel preferences, responses: { '200': { description: List } } }
+    put: { summary: Set a channel preference for a category (upsert), responses: { '200': { description: Saved } } }
+  /suscripciones:
+    get: { summary: List my push subscriptions, responses: { '200': { description: List } } }
+    post: { summary: Register a push subscription (upsert by endpoint), responses: { '201': { description: Registered } } }
+  /suscripciones/{id}:
+    delete: { summary: Remove my own push subscription, responses: { '200': { description: Removed } } }
+  '':
+    get:
+      summary: List my notifications
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [queued, sending, delivered, failed, read] } }
+        - { name: channel, in: query, schema: { type: string, enum: [in_app, email, push, sms] } }
+      responses: { '200': { description: Paginated list } }
+    post:
+      summary: Send an ad-hoc notification (admin/staff only) — most notifications are created automatically by the domain-events consumer instead.
+      responses: { '201': { description: Created } }
+  /no-leidas/conteo:
+    get: { summary: Count my unread notifications, responses: { '200': { description: '{ total }' } } }
+  /leer-todas:
+    post: { summary: Mark all my notifications as read, responses: { '200': { description: '{ total }' } } }
+  /{id}/leer:
+    post: { summary: Mark one of my notifications as read, responses: { '200': { description: Updated }, '403': { description: Not your notification } } }

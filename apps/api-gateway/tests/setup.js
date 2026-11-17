@@ -5,6 +5,7 @@ const testEnv = {
   PORT: '3000',
   NODE_ENV: 'test',
   JWT_SECRET: 'test_secret_key_min_32_characters_long_for_jest',
+  SERVICE_AUTH_TOKEN: 'test_service_token_min_32_characters_long_for_jest',
   CORS_ALLOWED_ORIGINS: 'http://localhost:3000',
   RATE_LIMIT_BUCKET_CAPACITY: '100',
   RATE_LIMIT_REFILL_PER_SEC: '10',

@@ -1,0 +1,255 @@
+### ============================================
+### BOOKING SERVICE - Pruebas de endpoints (vía API Gateway)
+### Puerto interno: 3006 | Prefijo gateway: /api/v1/reservas -> /api/v1/bookings
+### Base de datos: uajs_bookings (bookings, booking_types, booking_statuses, booking_audit_trail)
+### Depende de resource-service (3005) para verificar disponibilidad.
+### ============================================
+
+@gateway = http://localhost:3000
+@direct = http://localhost:3006
+@contentType = application/json
+@adminEmail = evidencia.qa@uajs.edu
+@adminPassword = EvidenciaQA.2026
+@resourceId = 1
+
+### ============================================
+### IDs REALES ya existentes en uajs_bookings.bookings.
+### Se usan en lugar de {{createReserva.response.body.data.id}} para que cada
+### request funcione por sí solo, sin depender de ejecutar antes el POST.
+### Estado actual (verificar con la consulta de abajo):
+###   @id        -> bk-2026-c28d68af  status 6 completed  (consulta GET)
+###   @idFlujo   -> bk-2026-5b5e67ea  status 1 pending    (aprobar -> confirmar -> completar)
+###   @idRechazo -> bk-2026-e9752a0b  status 1 pending    (rechazar)
+###   @idCancelar-> bk-2026-868cf3b1  status 1 pending    (cancelar)
+###   SELECT id, reference_number, title, status_id
+###   FROM uajs_bookings.bookings ORDER BY id DESC;
+### OJO: las transiciones MUTAN el estado. Si vuelves a ejecutar el archivo
+### después de aprobar/confirmar/completar/rechazar/cancelar, esos requests
+### responderán 409 ("Cannot transition from ...") porque el estado ya cambió.
+### Para reiniciar: recrea las reservas y actualiza estos valores.
+### ============================================
+@id = 6
+@idFlujo = 4
+@idRechazo = 5
+@idCancelar = 6
+
+### ============================================
+### PREREQUISITOS
+### 1) SUPERADMIN asignado (ver user-service.http) y LOGIN ejecutado.
+### 2) Recurso ACTIVO creado con resource-service.http; reemplazar @resourceId
+###    (SELECT id FROM uajs_resources.resources WHERE is_active = 1;).
+### 3) El recurso debe tener horario para el DÍA DE LA SEMANA de cada bookingDate y
+###    no debe estar bloqueado en esa franja. Si no, el servicio responde
+###    409 "Resource is not available: closed_on_this_day" / "outside_operating_hours".
+###    Ejemplo para habilitar todos los días de un recurso (0=domingo .. 6=sábado):
+###      POST {{gateway}}/api/v1/recursos/recursos/{{resourceId}}/horarios
+###      { "dayOfWeek": 2, "openTime": "06:00", "closeTime": "22:00" }
+###    OJO: 2026-11-10 es martes (dayOfWeek 2). El tipo AULA (id 1) admite hasta
+###    240 minutos y 30 días de antelación.
+### 4) Las reservas no se borran: solo se cancelan o rechazan (auditoría).
+### ============================================
+
+### HEALTH CHECK
+GET {{direct}}/api/v1/bookings/health
+
+### LOGIN
+# @name login
+POST {{gateway}}/api/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+### ============================================
+### TIPOS DE RESERVA  (booking_types)
+### Semilla: 1 AULA, 2 LABORATORIO, 3 AUDITORIO, 4 EQUIPO
+### ============================================
+
+### Listar tipos -> 200
+GET {{gateway}}/api/v1/reservas/tipos?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Crear tipo de prueba -> 201
+# @name createTipo
+POST {{gateway}}/api/v1/reservas/tipos
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "code": "LAB2",
+  "name": "LABORATORIO DE CÓMPUTO",
+  "description": "Tipo de reserva para laboratorios de cómputo",
+  "requiresApproval": true,
+  "maxDurationMinutes": 240,
+  "advanceDaysLimit": 10
+}
+
+### Actualizar tipo -> 200
+PUT {{gateway}}/api/v1/reservas/tipos/{{id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "maxDurationMinutes": 90
+}
+
+### ============================================
+### ESTADOS  (booking_statuses, semilla)
+### pending, approved, rejected, confirmed, cancelled, completed
+### ============================================
+
+GET {{gateway}}/api/v1/reservas/estados?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ============================================
+### RESERVAS  (bookings)
+### Flujo: pending -> approved -> confirmed -> completed
+###        pending -> rejected
+###        no final -> cancelled (por el solicitante)
+### ============================================
+
+### Crear reserva (queda en pending) -> 201
+# @name createReserva
+POST {{gateway}}/api/v1/reservas/reservas
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "bookingTypeId": 1,
+  "resourceId": {{resourceId}},
+  "title": "Clase de prueba QA",
+  "description": "Reserva creada desde pruebas",
+  "bookingDate": "2026-11-10",
+  "startTime": "09:00",
+  "endTime": "11:00",
+  "expectedAttendees": 20
+}
+
+### Fin anterior al inicio -> 400 (CHECK end_time > start_time)
+POST {{gateway}}/api/v1/reservas/reservas
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "bookingTypeId": 1,
+  "resourceId": {{resourceId}},
+  "title": "Horario inválido",
+  "bookingDate": "2026-11-10",
+  "startTime": "11:00",
+  "endTime": "09:00"
+}
+
+### Duración mayor al máximo del tipo -> 400
+POST {{gateway}}/api/v1/reservas/reservas
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "bookingTypeId": 1,
+  "resourceId": {{resourceId}},
+  "title": "Demasiado larga",
+  "bookingDate": "2026-11-11",
+  "startTime": "08:00",
+  "endTime": "15:00"
+}
+
+### Listar reservas (filtros statusId, resourceUuid) -> 200
+GET {{gateway}}/api/v1/reservas/reservas?page=1&limit=10&statusId=1
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Obtener reserva -> 200
+GET {{gateway}}/api/v1/reservas/reservas/{{id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Historial de transiciones (booking_audit_trail) -> 200
+GET {{gateway}}/api/v1/reservas/reservas/{{idFlujo}}/historial
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Aprobar (ADMIN) -> 200 (pending -> approved)
+POST {{gateway}}/api/v1/reservas/reservas/{{idFlujo}}/aprobar
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Confirmar (ADMIN) -> 200 (approved -> confirmed)
+POST {{gateway}}/api/v1/reservas/reservas/{{idFlujo}}/confirmar
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Completar (ADMIN) -> 200 (confirmed -> completed)
+POST {{gateway}}/api/v1/reservas/reservas/{{idFlujo}}/completar
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ---- Reserva para probar rechazo ----
+# @name createReservaRechazo
+POST {{gateway}}/api/v1/reservas/reservas
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "bookingTypeId": 1,
+  "resourceId": {{resourceId}},
+  "title": "Reserva para rechazar",
+  "bookingDate": "2026-11-10",
+  "startTime": "14:00",
+  "endTime": "16:00"
+}
+
+### Rechazar sin motivo -> 400 (reason min 3)
+POST {{gateway}}/api/v1/reservas/reservas/{{idRechazo}}/rechazar
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "reason": ""
+}
+
+### Rechazar con motivo (ADMIN) -> 200 (estado final rejected)
+POST {{gateway}}/api/v1/reservas/reservas/{{idRechazo}}/rechazar
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "reason": "Sala reservada para mantenimiento"
+}
+
+### ---- Reserva para probar cancelación por el solicitante ----
+# @name createReservaCancelar
+POST {{gateway}}/api/v1/reservas/reservas
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "bookingTypeId": 1,
+  "resourceId": {{resourceId}},
+  "title": "Reserva para cancelar",
+  "bookingDate": "2026-11-12",
+  "startTime": "10:00",
+  "endTime": "11:00"
+}
+
+### Cancelar con motivo (solicitante) -> 200
+POST {{gateway}}/api/v1/reservas/reservas/{{idCancelar}}/cancelar
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "reason": "Cambio de planes"
+}
+
+### Sin token -> 401
+GET {{gateway}}/api/v1/reservas/reservas
+
+### ============================================
+### LIMPIEZA
+### Las reservas no se borran (tienen auditoría). Solo se elimina el tipo de prueba,
+### que no tiene reservas asociadas.
+### ============================================
+DELETE {{gateway}}/api/v1/reservas/tipos/{{createTipo.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ============================================
+### VERIFICACIÓN EN BD
+### SELECT id, reference_number, status_id, requester_uuid, resource_uuid FROM uajs_bookings.bookings ORDER BY id DESC LIMIT 5;
+### SELECT booking_id, from_status_id, to_status_id, actor_name, occurred_at FROM uajs_bookings.booking_audit_trail ORDER BY id DESC LIMIT 10;
+
+

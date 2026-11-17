@@ -6,7 +6,7 @@ const { z } = require('zod');
 dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
 
 const EnvSchema = z.object({
-  NODE_ENV: z.enum(['development', 'staging', 'production']).default('development'),
+  NODE_ENV: z.enum(['development', 'staging', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(3002),
   MYSQL_HOST: z.string().default('localhost'),
   MYSQL_PORT: z.coerce.number().int().positive().default(3306),

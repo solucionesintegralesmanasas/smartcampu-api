@@ -103,20 +103,7 @@ class MySQLPool {
   }
 
   async query(sql, params = []) {
-    try {
-      return await this.breaker.fire(sql, params);
-    } catch (error) {
-      if (this.breaker.open) {
-        const conn = await this.getConnection();
-        try {
-          const [results] = await conn.query(sql, params);
-          return results;
-        } finally {
-          conn.release();
-        }
-      }
-      throw error;
-    }
+    return this.breaker.fire(sql, params);
   }
 
   async execute(sql, params = []) {

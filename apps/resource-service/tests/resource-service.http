@@ -1,0 +1,282 @@
+### ============================================
+### RESOURCE SERVICE - Pruebas de endpoints (vía API Gateway)
+### Puerto interno: 3005 | Prefijo gateway: /api/v1/recursos -> /api/v1/resources
+### Base de datos: uajs_resources (resources, resource_categories, resource_statuses,
+### resource_schedules, resource_blackouts, inventory_items)
+### ============================================
+
+@gateway = http://localhost:3000
+@direct = http://localhost:3005
+@contentType = application/json
+@adminEmail = evidencia.qa@uajs.edu
+@adminPassword = EvidenciaQA.2026
+@campusUuid = PEGA_UUID_DE_LA_SEDE_PRINCIPAL
+@serviceToken = uajs_service_token_2024_change_me_in_prod
+@resourceId = 1
+
+### ============================================
+### PREREQUISITOS
+### 1) SUPERADMIN asignado (ver user-service.http) y LOGIN ejecutado.
+### 2) UUID de la sede: SELECT uuid FROM uajs_academic.campuses WHERE is_main = 1;
+### 3) Estado semilla available (id 1, is_bookable = 1).
+### ============================================
+
+### HEALTH CHECK
+GET {{direct}}/api/v1/resources/health
+
+### LOGIN
+# @name login
+POST {{gateway}}/api/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+### ============================================
+### CATEGORÍAS  (resource_categories)
+### ============================================
+
+### Crear categoría -> 201
+# @name createCategoria
+POST {{gateway}}/api/v1/recursos/categorias
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "code": "SALA_QA",
+  "name": "Sala de pruebas",
+  "icon": "door-open",
+  "description": "Categoría creada para pruebas QA"
+}
+
+### Código duplicado -> 409 (UK uq_resource_categories_code)
+POST {{gateway}}/api/v1/recursos/categorias
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "code": "SALA_QA",
+  "name": "Duplicada"
+}
+
+### Listar categorías -> 200
+GET {{gateway}}/api/v1/recursos/categorias?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Actualizar categoría -> 200
+PUT {{gateway}}/api/v1/recursos/categorias/{{createCategoria.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "description": "Categoría de pruebas (actualizada)"
+}
+
+### ============================================
+### ESTADOS OPERATIVOS  (resource_statuses)
+### ============================================
+
+### Crear estado -> 201
+# @name createEstado
+POST {{gateway}}/api/v1/recursos/estados
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "code": "QA_BLOQUEADO",
+  "name": "Bloqueado para QA",
+  "isBookable": false,
+  "colorHex": "#999999"
+}
+
+### Listar estados (incluye available, maintenance, out_of_service, reserved) -> 200
+GET {{gateway}}/api/v1/recursos/estados?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ============================================
+### RECURSOS  (resources)
+### ============================================
+
+### Crear recurso -> 201
+# @name createRecurso
+POST {{gateway}}/api/v1/recursos/recursos
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "categoryId": {{createCategoria.response.body.data.id}},
+  "statusId": 1,
+  "campusUuid": "{{campusUuid}}",
+  "campusName": "Sede Principal",
+  "code": "QA-SALA-001",
+  "name": "Sala QA 001",
+  "description": "Sala de pruebas con proyector",
+  "capacity": 30,
+  "floor": "2",
+  "building": "A",
+  "hasInventory": false,
+  "attributes": {
+    "proyector": true,
+    "aire": true
+  }
+}
+
+### Código duplicado -> 409 (UK uq_resources_code)
+POST {{gateway}}/api/v1/recursos/recursos
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "categoryId": {{createCategoria.response.body.data.id}},
+  "statusId": 1,
+  "campusUuid": "{{campusUuid}}",
+  "campusName": "Sede Principal",
+  "code": "QA-SALA-001",
+  "name": "Duplicado"
+}
+
+### Listar recursos filtrados por categoría y sede -> 200
+GET {{gateway}}/api/v1/recursos/recursos?categoryId={{createCategoria.response.body.data.id}}&campusUuid={{campusUuid}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Obtener recurso -> 200
+GET {{gateway}}/api/v1/recursos/recursos/{{createRecurso.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Actualizar recurso (capacidad) -> 200
+PUT {{gateway}}/api/v1/recursos/recursos/{{createRecurso.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "capacity": 32
+}
+
+### Pasar a mantenimiento -> 200
+PUT {{gateway}}/api/v1/recursos/recursos/{{createRecurso.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "statusId": 2
+}
+
+### Volver a disponible -> 200
+PUT {{gateway}}/api/v1/recursos/recursos/{{createRecurso.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "statusId": 1
+}
+
+### ============================================
+### HORARIOS  (resource_schedules)
+### dayOfWeek: 0 = Domingo ... 6 = Sábado. UK (resource_id, day_of_week).
+### ============================================
+
+### Crear horario (lunes) -> 201
+# @name createHorario
+POST {{gateway}}/api/v1/recursos/recursos/{{createRecurso.response.body.data.id}}/horarios
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "dayOfWeek": 1,
+  "openTime": "07:00",
+  "closeTime": "21:00"
+}
+
+### Segundo horario el mismo día -> 409 (UK uq_resource_schedules_slot)
+POST {{gateway}}/api/v1/recursos/recursos/{{createRecurso.response.body.data.id}}/horarios
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "dayOfWeek": 1,
+  "openTime": "08:00",
+  "closeTime": "12:00"
+}
+
+### Cierre antes de apertura -> 400 (CHECK close_time > open_time)
+POST {{gateway}}/api/v1/recursos/recursos/{{createRecurso.response.body.data.id}}/horarios
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "dayOfWeek": 2,
+  "openTime": "18:00",
+  "closeTime": "08:00"
+}
+
+### Listar horarios del recurso -> 200
+GET {{gateway}}/api/v1/recursos/recursos/{{createRecurso.response.body.data.id}}/horarios
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Actualizar horario -> 200
+PUT {{gateway}}/api/v1/recursos/recursos/{{createRecurso.response.body.data.id}}/horarios/{{createHorario.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "closeTime": "20:00"
+}
+
+### ============================================
+### BLOQUEOS  (resource_blackouts)
+### starts_at / ends_at en UTC (time_zone de la BD = +00:00). CHECK ends_at > starts_at.
+### ============================================
+
+### Crear bloqueo (mantenimiento) -> 201
+# @name createBloqueo
+POST {{gateway}}/api/v1/recursos/recursos/{{createRecurso.response.body.data.id}}/bloqueos
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "startsAt": "2026-11-02T08:00:00",
+  "endsAt": "2026-11-02T12:00:00",
+  "reason": "Mantenimiento preventivo QA"
+}
+
+### Listar bloqueos -> 200
+GET {{gateway}}/api/v1/recursos/recursos/{{createRecurso.response.body.data.id}}/bloqueos
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Eliminar bloqueo -> 200
+DELETE {{gateway}}/api/v1/recursos/recursos/{{createRecurso.response.body.data.id}}/bloqueos/{{createBloqueo.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ============================================
+### DISPONIBILIDAD (solo servicio a servicio)
+### booking-service la consulta con X-Service-Token. Un usuario final no es servicio
+### de confianza, por eso el gateway no la expone.
+### ============================================
+
+### Disponibilidad con X-Service-Token (directo al puerto) -> 200
+GET {{direct}}/api/v1/resources/recursos/{{resourceId}}/disponibilidad?date=2026-11-10&startTime=09:00&endTime=11:00
+X-Service-Token: {{serviceToken}}
+
+### Mismo endpoint sin X-Service-Token -> 401/403
+GET {{direct}}/api/v1/resources/recursos/{{resourceId}}/disponibilidad?date=2026-11-10&startTime=09:00&endTime=11:00
+
+### ============================================
+### LIMPIEZA (recurso antes que estado y categoría)
+### ============================================
+DELETE {{gateway}}/api/v1/recursos/recursos/{{createRecurso.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+DELETE {{gateway}}/api/v1/recursos/estados/{{createEstado.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+DELETE {{gateway}}/api/v1/recursos/categorias/{{createCategoria.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ============================================
+### VERIFICACIÓN EN BD
+### SELECT id, code, status_id, is_active FROM uajs_resources.resources WHERE code = 'QA-SALA-001';
+### SELECT resource_id, day_of_week, open_time, close_time FROM uajs_resources.resource_schedules;
+### SELECT * FROM uajs_resources.resource_blackouts ORDER BY id DESC LIMIT 3;
+### ============================================

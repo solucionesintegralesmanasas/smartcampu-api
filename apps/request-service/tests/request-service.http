@@ -1,0 +1,275 @@
+### ============================================
+### REQUEST SERVICE - Pruebas de endpoints (vía API Gateway)
+### Puerto interno: 3007 | Prefijo gateway: /api/v1/solicitudes -> /api/v1/requests
+### Base de datos: uajs_requests (requests, request_types, request_categories,
+### request_statuses, request_comments, request_attachments, request_audit_trail)
+### Adjuntos: requiere un archivo previo en storage-service.http (fileId).
+### ============================================
+
+@gateway = http://localhost:3000
+@direct = http://localhost:3007
+@contentType = application/json
+@adminEmail = evidencia.qa@uajs.edu
+@adminPassword = EvidenciaQA.2026
+@fileId = 1
+
+### ============================================
+### PREREQUISITOS
+### 1) SUPERADMIN asignado (ver user-service.http) y LOGIN ejecutado.
+### 2) Estados semilla: pending, in_review, approved, rejected, closed.
+### ============================================
+
+### HEALTH CHECK
+GET {{direct}}/api/v1/requests/health
+
+### LOGIN
+# @name login
+POST {{gateway}}/api/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+### ============================================
+### CATEGORÍAS  (request_categories)
+### ============================================
+
+### Crear categoría -> 201
+# @name createCategoria
+POST {{gateway}}/api/v1/solicitudes/categorias
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "code": "QA_CAT",
+  "name": "Categoría QA",
+  "icon": "flask",
+  "sortOrder": 9
+}
+
+### Listar categorías -> 200
+GET {{gateway}}/api/v1/solicitudes/categorias?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Actualizar categoría -> 200
+PUT {{gateway}}/api/v1/solicitudes/categorias/{{createCategoria.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "name": "Categoría QA actualizada"
+}
+
+### ============================================
+### TIPOS DE SOLICITUD  (request_types, con SLA y form_schema)
+### ============================================
+
+### Crear tipo -> 201
+# @name createTipo
+POST {{gateway}}/api/v1/solicitudes/tipos
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "categoryId": {{createCategoria.response.body.data.id}},
+  "code": "QA_TIPO",
+  "name": "Tipo QA",
+  "description": "Tipo de solicitud para pruebas",
+  "requiresApproval": true,
+  "slaDays": 5,
+  "cost": 0,
+  "formSchema": {
+    "fields": [
+      { "name": "motivo", "type": "text", "required": true }
+    ]
+  }
+}
+
+### Listar tipos de la categoría -> 200
+GET {{gateway}}/api/v1/solicitudes/tipos?categoryId={{createCategoria.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Actualizar SLA -> 200
+PUT {{gateway}}/api/v1/solicitudes/tipos/{{createTipo.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "slaDays": 7
+}
+
+### ============================================
+### ESTADOS  (request_statuses, semilla)
+### ============================================
+
+GET {{gateway}}/api/v1/solicitudes/estados?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ============================================
+### SOLICITUDES  (requests)
+### Flujo: pending -> in_review -> approved | rejected -> closed
+### ============================================
+
+### Crear solicitud (pending, ticket REQ-AAAA-NNNNNN) -> 201
+# @name createSolicitud
+POST {{gateway}}/api/v1/solicitudes/solicitudes
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "requestTypeId": {{createTipo.response.body.data.id}},
+  "title": "Solicitud de prueba QA2",
+  "description": "Descripción detallada de la solicitud de prueba",
+  "formData": {
+    "motivo": "Prueba de flujo"
+  }
+}
+
+### Título demasiado corto -> 400 (min 3)
+POST {{gateway}}/api/v1/solicitudes/solicitudes
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "requestTypeId": {{createTipo.response.body.data.id}},
+  "title": "ab",
+  "description": "Descripción válida"
+}
+
+### Listar solicitudes (filtros statusId, assigneeUuid) -> 200
+GET {{gateway}}/api/v1/solicitudes/solicitudes?page=1&limit=10&statusId=1
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Obtener solicitud -> 200
+GET {{gateway}}/api/v1/solicitudes/solicitudes/{{createSolicitud.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Pasar a revisión (ADMIN) -> 200
+POST {{gateway}}/api/v1/solicitudes/solicitudes/{{createSolicitud.response.body.data.id}}/en-revision
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Aprobar con notas de resolución (ADMIN) -> 200
+POST {{gateway}}/api/v1/solicitudes/solicitudes/{{createSolicitud.response.body.data.id}}/aprobar
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "resolutionNotes": "Solicitud aprobada en prueba QA"
+}
+
+### Cerrar (ADMIN) -> 200
+POST {{gateway}}/api/v1/solicitudes/solicitudes/{{createSolicitud.response.body.data.id}}/cerrar
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Historial de transiciones -> 200
+GET {{gateway}}/api/v1/solicitudes/solicitudes/{{createSolicitud.response.body.data.id}}/historial
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ---- Solicitud para probar rechazo ----
+# @name createSolicitudRechazo
+POST {{gateway}}/api/v1/solicitudes/solicitudes
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "requestTypeId": {{createTipo.response.body.data.id}},
+  "title": "Solicitud para rechazar",
+  "description": "Esta solicitud se rechazará en la prueba"
+}
+
+### Pasar a revisión antes de rechazar (rechazar solo es válido desde in_review) -> 200
+POST {{gateway}}/api/v1/solicitudes/solicitudes/{{createSolicitudRechazo.response.body.data.id}}/en-revision
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Rechazar con notas demasiado cortas -> 400 (resolutionNotes min 3)
+POST {{gateway}}/api/v1/solicitudes/solicitudes/{{createSolicitudRechazo.response.body.data.id}}/rechazar
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "resolutionNotes": "no"
+}
+
+### Rechazar con notas -> 200
+POST {{gateway}}/api/v1/solicitudes/solicitudes/{{createSolicitudRechazo.response.body.data.id}}/rechazar
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "resolutionNotes": "No cumple los requisitos de la prueba"
+}
+
+### ============================================
+### COMENTARIOS  (request_comments, borrado lógico con deleted_at)
+### ============================================
+
+### Crear comentario -> 201
+# @name createComentario
+POST {{gateway}}/api/v1/solicitudes/solicitudes/{{createSolicitud.response.body.data.id}}/comentarios
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "body": "Comentario de prueba QA",
+  "isInternal": false
+}
+
+### Nota interna (solo personal) -> 201
+POST {{gateway}}/api/v1/solicitudes/solicitudes/{{createSolicitud.response.body.data.id}}/comentarios
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "body": "Nota interna QA",
+  "isInternal": true
+}
+
+### Listar comentarios -> 200
+GET {{gateway}}/api/v1/solicitudes/solicitudes/{{createSolicitud.response.body.data.id}}/comentarios
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Eliminar comentario (soft delete) -> 200
+DELETE {{gateway}}/api/v1/solicitudes/solicitudes/{{createSolicitud.response.body.data.id}}/comentarios/{{createComentario.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ============================================
+### ADJUNTOS  (request_attachments -> storage.files)
+### fileId: id devuelto al subir el archivo en storage-service.http
+### ============================================
+
+### Adjuntar archivo -> 201
+# @name createAdjunto
+POST {{gateway}}/api/v1/solicitudes/solicitudes/{{createSolicitud.response.body.data.id}}/adjuntos
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "fileId": {{fileId}}
+}
+
+### Listar adjuntos -> 200
+GET {{gateway}}/api/v1/solicitudes/solicitudes/{{createSolicitud.response.body.data.id}}/adjuntos
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Eliminar adjunto -> 200
+DELETE {{gateway}}/api/v1/solicitudes/solicitudes/{{createSolicitud.response.body.data.id}}/adjuntos/{{createAdjunto.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ============================================
+### LIMPIEZA
+### Las solicitudes tienen auditoría: no se borran. Solo se eliminan el tipo y la categoría
+### de prueba cuando no tienen solicitudes asociadas.
+### ============================================
+DELETE {{gateway}}/api/v1/solicitudes/tipos/{{createTipo.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+DELETE {{gateway}}/api/v1/solicitudes/categorias/{{createCategoria.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### ============================================
+### VERIFICACIÓN EN BD
+### SELECT id, ticket_number, status_id, requester_uuid, due_date FROM uajs_requests.requests ORDER BY id DESC LIMIT 5;
+### SELECT request_id, from_status_id, to_status_id, actor_name FROM uajs_requests.request_audit_trail ORDER BY id DESC LIMIT 10;
+### ============================================

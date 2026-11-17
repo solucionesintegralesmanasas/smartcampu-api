@@ -1,0 +1,190 @@
+### ============================================
+### USER SERVICE - CRUD completo de usuarios (vía API Gateway)
+### Base de datos: uajs_auth (tablas: users, persons, user_roles, roles)
+###   Contenedor: uajs-mysql | Host: 127.0.0.1 | Puerto: 3307 | Usuario de la app: uajs_user
+### Puerto interno: 3002 | Prefijo gateway: /api/v1/usuarios -> /api/v1/users
+### Crear usuario: POST /api/v1/auth/register (auth-service). user-service no expone POST.
+### ============================================
+
+@gateway = http://localhost:3000
+@direct = http://localhost:3002
+@contentType = application/json
+@adminEmail = silvanabohorquez10@gmail.com
+@adminPassword = estudiantes123
+@userId = 3
+
+### ============================================
+### PREREQUISITO (una sola vez por base de datos)
+### El administrador debe tener rol SUPERADMIN o ADMIN:
+###   INSERT IGNORE INTO uajs_auth.user_roles (user_id, role_id)
+###   SELECT id, 1 FROM uajs_auth.users WHERE email = 'evidencia.qa@uajs.edu';
+### Después ejecutar LOGIN (el rol viaja dentro del JWT).
+### ============================================
+
+### HEALTH CHECK -> 200
+GET {{direct}}/api/v1/users/health
+
+### ============================================
+### LOGIN ADMINISTRADOR
+### ============================================
+# @name login
+POST {{gateway}}/api/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+### ============================================
+### 1. CREATE - Registrar usuario -> 201
+### Crea persons + users + user_roles (STUDENT por defecto).
+### ============================================
+# @name createUsuario
+POST {{gateway}}/api/v1/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "silvanabohorquez10@gmail.com",
+  "password": "estudiantes123",
+  "firstName": "Silvana",
+  "middleName": "Maria",
+  "lastName": "Bohorquez",
+  "secondLastName": "Gomez",
+  "documentTypeCode": "CC",
+  "documentNumber": "1100688700",
+  "phone": "3001112233"
+}
+
+### Registro duplicado (mismo correo o documento) -> 409
+POST {{gateway}}/api/v1/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "crud.usuario@uajs.edu",
+  "password": "CrudUsuario.2026",
+  "firstName": "Duplicado",
+  "lastName": "Prueba",
+  "documentTypeCode": "CC",
+  "documentNumber": "1030405060"
+}
+
+### Correo inválido -> 400
+POST {{gateway}}/api/v1/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "no-es-correo",
+  "password": "CrudUsuario.2026",
+  "firstName": "Inválido",
+  "lastName": "Prueba",
+  "documentTypeCode": "CC",
+  "documentNumber": "1030405061"
+}
+
+### ============================================
+### 2. READ - Consultas
+### ============================================
+
+### Listar usuarios (paginado, filtro por rol) -> 200
+GET {{gateway}}/api/v1/usuarios/usuarios?page=1&limit=10&role=STUDENT
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Obtener usuario creado por id -> 200
+GET {{gateway}}/api/v1/usuarios/usuarios/{{createUsuario.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Obtener usuario inexistente -> 404
+GET {{gateway}}/api/v1/usuarios/usuarios/999999
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Buscar usuarios (Elasticsearch; un usuario recién creado puede no aparecer hasta indexarse) -> 200
+GET {{gateway}}/api/v1/usuarios/usuarios/search?search=Usuario
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Mi perfil (usuario autenticado) -> 200
+GET {{gateway}}/api/v1/usuarios/perfil
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Sin token -> 401
+GET {{gateway}}/api/v1/usuarios/usuarios
+
+### ============================================
+### 3. UPDATE - Actualizaciones
+### ============================================
+
+### Actualizar datos personales -> 200
+PUT {{gateway}}/api/v1/usuarios/usuarios/{{createUsuario.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+ 
+  "phone": "1234567890"
+}
+
+### Actualizar campo inválido (longitud) -> 400
+PUT {{gateway}}/api/v1/usuarios/usuarios/{{createUsuario.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "firstName": ""
+}
+
+### Reemplazar roles -> 200
+### OJO: reemplaza TODO el conjunto de roles. Roles válidos: SUPERADMIN, ADMIN, STAFF, TEACHER, STUDENT.
+PUT {{gateway}}/api/v1/usuarios/usuarios/{{createUsuario.response.body.data.id}}/roles
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "roles": ["TEACHER"]
+}
+
+### Rol fuera del enum -> 400
+PUT {{gateway}}/api/v1/usuarios/usuarios/{{createUsuario.response.body.data.id}}/roles
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "roles": ["INVENTADO"]
+}
+
+### ============================================
+### 4. DELETE - Desactivación (borrado lógico: users.is_active = 0)
+### La tabla users no se borra físicamente; deleted_at no se usa en esta operación.
+### ============================================
+
+### Desactivar usuario creado -> 200
+DELETE {{gateway}}/api/v1/usuarios/usuarios/{{createUsuario.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Consultar usuario desactivado -> 200 con isActive = 0
+GET {{gateway}}/api/v1/usuarios/usuarios/{{createUsuario.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Reactivar usuario (UPDATE de isActive) -> 200
+PUT {{gateway}}/api/v1/usuarios/usuarios/{{createUsuario.response.body.data.id}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "isActive": true
+}
+
+### Login del usuario desactivado -> 401 (cuenta inactiva)
+POST {{gateway}}/api/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "crud.usuario@uajs.edu",
+  "password": "CrudUsuario.2026"
+}
+
+### ============================================
+### VERIFICACIÓN EN BD (uajs_auth)
+### SELECT id, uuid, email, is_active, created_at, updated_at FROM uajs_auth.users WHERE email = 'crud.usuario@uajs.edu';
+### SELECT p.id, p.document_number, p.first_name, p.last_name, p.phone FROM uajs_auth.persons p JOIN uajs_auth.users u ON u.person_id = p.id WHERE u.email = 'crud.usuario@uajs.edu';
+### SELECT r.name FROM uajs_auth.user_roles ur JOIN uajs_auth.roles r ON r.id = ur.role_id JOIN uajs_auth.users u ON u.id = ur.user_id WHERE u.email = 'crud.usuario@uajs.edu';
+### ============================================

@@ -1,0 +1,473 @@
+### ============================================================================
+### UAJS SMART CAMPUS — COLECCIÓN REST CLIENT · 01 · TODO POR EL API GATEWAY
+### ----------------------------------------------------------------------------
+### Todas las peticiones entran por el gateway (puerto 3000) con un JWT real.
+### El gateway valida el token, aplica rate limit y reescribe el prefijo público
+### (español) al prefijo interno (inglés) de cada microservicio.
+###
+### ORDEN DE EJECUCIÓN: ejecutar S01.01 (login) antes que cualquier otra
+### petición; el resto encadena {{login.response.body.data.accessToken}}.
+###
+### Requiere: docker compose up (MySQL 3307, Redis 6379, ES 9200 + los 12
+### servicios) y el usuario evidencia.qa@uajs.edu con rol SUPERADMIN.
+### ============================================================================
+
+@gateway = http://localhost:3000
+@contentType = application/json
+@email = evidencia.qa@uajs.edu
+@password = EvidenciaQA.2026
+
+### IDs reales ya existentes en las bases (para GET por id sin depender de
+### un POST previo). Si recreas datos, actualiza estos valores.
+@userId = 6
+@resourceId = 1
+@reservaId = 4
+@solicitudId = 1
+@pqrsId = 1
+@eventoId = 1
+@fileId = 1
+@notificationId = 1
+@sedeId = 1
+@campusUuid = e5c4aa33-cbe5-11f1-9d9d-4e6483f921e9
+@tipoSolicitudId = 1
+@tipoReservaId = 1
+
+
+### ============================================================================
+### S00 · SALUD DEL GATEWAY
+### ============================================================================
+
+### S00.01 Liveness del gateway -> 200
+GET {{gateway}}/health/liveness
+
+### S00.02 Readiness (comprueba dependencias: MySQL, Redis, Elasticsearch) -> 200
+GET {{gateway}}/health/readiness
+
+### S00.03 Métricas Prometheus -> 200 (text/plain)
+GET {{gateway}}/health/metrics
+
+
+### ============================================================================
+### S01 · AUTENTICACIÓN (auth-service :3001)
+### ============================================================================
+
+### S01.01 Login -> 200 { data: { accessToken, refreshToken } }
+# @name login
+POST {{gateway}}/api/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### S01.02 Refresh (rota el refreshToken) -> 200
+### OJO (defecto real, no del archivo): /api/v1/auth/refresh NO está en
+### PUBLIC_ROUTES del gateway, así que hay que mandar el accessToken aunque lo
+### que se esté renovando sea precisamente el accessToken caducado. Y si se
+### ejecuta en el MISMO segundo que S01.01, el refreshToken es idéntico
+### (mismo payload `{sub, iat, exp}`) y el UNIQUE de token_hash responde 500.
+### Déjalo pasar 2 segundos antes de enviarlo.
+# @name refresh
+POST {{gateway}}/api/v1/auth/refresh
+Content-Type: {{contentType}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+{
+  "refreshToken": "{{login.response.body.data.refreshToken}}"
+}
+
+### S01.03 Perfil del usuario autenticado -> 200
+GET {{gateway}}/api/v1/usuarios/perfil
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S01.04 Sin token -> 401 (auth.middleware del gateway)
+GET {{gateway}}/api/v1/reservas/reservas
+
+
+### ============================================================================
+### S02 · USUARIOS (user-service :3002)
+### ============================================================================
+
+### S02.01 Listar usuarios -> 200
+GET {{gateway}}/api/v1/usuarios/usuarios?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S02.02 Detalle por id -> 200
+GET {{gateway}}/api/v1/usuarios/usuarios/{{userId}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S02.03 Búsqueda -> 200
+GET {{gateway}}/api/v1/usuarios/usuarios/search?search=Evidencia
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S02.04 Roles -> 200
+GET {{gateway}}/api/v1/usuarios/roles?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S02.05 Permisos -> 200
+GET {{gateway}}/api/v1/usuarios/permisos?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+
+### ============================================================================
+### S03 · CATÁLOGOS (catalog-service :3003)
+### ============================================================================
+
+### S03.01 Departamentos -> 200
+GET {{gateway}}/api/v1/catalogos/departments?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S03.02 Ciudades -> 200
+GET {{gateway}}/api/v1/catalogos/cities?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S03.03 Tipos de documento -> 200
+GET {{gateway}}/api/v1/catalogos/document-types?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S03.04 Sedes por catálogo -> 500 (DEFECTO CONOCIDO: la tabla
+### uajs_catalog.sedes no existe). Usar S04.01, que es la fuente oficial.
+GET {{gateway}}/api/v1/catalogos/campuses?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+
+### ============================================================================
+### S04 · UNIVERSIDAD (university-service :3004) — fuente oficial de sedes
+### ============================================================================
+
+### S04.01 Sedes -> 200 (de aquí sale campusUuid para resource-service)
+GET {{gateway}}/api/v1/universidad/sedes?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S04.02 Detalle de sede -> 200
+GET {{gateway}}/api/v1/universidad/sedes/{{sedeId}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S04.03 Facultades -> 200
+GET {{gateway}}/api/v1/universidad/facultades?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S04.04 Programas -> 200
+GET {{gateway}}/api/v1/universidad/programas?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S04.05 Estudiantes -> 200
+GET {{gateway}}/api/v1/universidad/estudiantes?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S04.06 Docentes -> 200
+GET {{gateway}}/api/v1/universidad/docentes?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S04.07 Empresas -> 200
+GET {{gateway}}/api/v1/universidad/empresas?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S04.08 Terceros -> 200
+GET {{gateway}}/api/v1/universidad/terceros?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+
+### ============================================================================
+### S05 · RECURSOS (resource-service :3005)
+### ============================================================================
+
+### S05.01 Categorías -> 200
+GET {{gateway}}/api/v1/recursos/categorias?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S05.02 Estados (is_bookable) -> 200
+GET {{gateway}}/api/v1/recursos/estados?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S05.03 Listar recursos (paginado, filtros categoryId / campusUuid) -> 200
+GET {{gateway}}/api/v1/recursos/recursos?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S05.04 Detalle de recurso -> 200
+GET {{gateway}}/api/v1/recursos/recursos/{{resourceId}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S05.05 Horarios semanales del recurso -> 200
+GET {{gateway}}/api/v1/recursos/recursos/{{resourceId}}/horarios
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S05.06 Bloqueos excepcionales -> 200
+GET {{gateway}}/api/v1/recursos/recursos/{{resourceId}}/bloqueos
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S05.07 Disponibilidad operativa (estado + horario + bloqueo) -> 200
+GET {{gateway}}/api/v1/recursos/recursos/{{resourceId}}/disponibilidad?date=2026-11-17&startTime=09:00&endTime=11:00
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S05.08 Crear recurso -> 201
+### campusUuid DEBE ser el uuid real de uajs_academic.campuses (ver S04.01),
+### campusName es el snapshot y statusId 1 = available (único reservable).
+POST {{gateway}}/api/v1/recursos/recursos
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "categoryId": 6,
+  "statusId": 1,
+  "campusUuid": "{{campusUuid}}",
+  "campusName": "Sede Principal",
+  "code": "EVID-RESTCLIENT-001",
+  "name": "Aula coleccion REST Client",
+  "description": "Recurso creado desde la colección de REST Client",
+  "capacity": 30
+}
+
+
+### ============================================================================
+### S06 · RESERVAS (booking-service :3006)
+### ============================================================================
+
+### S06.01 Tipos de reserva -> 200
+GET {{gateway}}/api/v1/reservas/tipos?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S06.02 Estados de reserva -> 200
+GET {{gateway}}/api/v1/reservas/estados?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S06.03 Listar reservas -> 200
+GET {{gateway}}/api/v1/reservas/reservas?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S06.04 Detalle de reserva -> 200
+GET {{gateway}}/api/v1/reservas/reservas/{{reservaId}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S06.05 Historial de transiciones (booking_audit_trail) -> 200
+GET {{gateway}}/api/v1/reservas/reservas/{{reservaId}}/historial
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S06.06 Crear reserva -> 201 (arranca en pending: AULA requires_approval = 1)
+# @name createReserva
+POST {{gateway}}/api/v1/reservas/reservas
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "bookingTypeId": {{tipoReservaId}},
+  "resourceId": {{resourceId}},
+  "title": "Reserva desde coleccion REST Client",
+  "description": "Peticion preparada para repetir la prueba de integracion",
+  "bookingDate": "2026-11-26",
+  "startTime": "09:00",
+  "endTime": "11:00",
+  "expectedAttendees": 20
+}
+
+### S06.07 Conflicto de horario (mismo recurso, franja superpuesta) -> 409
+POST {{gateway}}/api/v1/reservas/reservas
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "bookingTypeId": {{tipoReservaId}},
+  "resourceId": {{resourceId}},
+  "title": "Intento solapado",
+  "bookingDate": "2026-11-26",
+  "startTime": "10:00",
+  "endTime": "12:00"
+}
+
+
+### ============================================================================
+### S07 · SOLICITUDES (request-service :3007)
+### ============================================================================
+
+### S07.01 Categorías -> 200
+GET {{gateway}}/api/v1/solicitudes/categorias?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S07.02 Tipos de solicitud -> 200
+GET {{gateway}}/api/v1/solicitudes/tipos?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S07.03 Estados -> 200
+GET {{gateway}}/api/v1/solicitudes/estados?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S07.04 Listar solicitudes -> 200
+GET {{gateway}}/api/v1/solicitudes/solicitudes?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S07.05 Detalle -> 200
+GET {{gateway}}/api/v1/solicitudes/solicitudes/{{solicitudId}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S07.06 Historial -> 200
+GET {{gateway}}/api/v1/solicitudes/solicitudes/{{solicitudId}}/historial
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S07.07 Crear solicitud (estado inicial pending) -> 201
+# @name createSolicitud
+POST {{gateway}}/api/v1/solicitudes/solicitudes
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "requestTypeId": {{tipoSolicitudId}},
+  "title": "Solicitud desde coleccion REST Client",
+  "description": "Peticion preparada para repetir la prueba de integracion",
+  "formData": { "priority": "ALTA" }
+}
+
+### S07.08 Transición válida pending -> in_review -> 200
+POST {{gateway}}/api/v1/solicitudes/solicitudes/{{createSolicitud.response.body.data.id}}/en-revision
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+
+### ============================================================================
+### S08 · EVENTOS (event-service :3008)
+### ============================================================================
+
+### S08.01 Categorías -> 200
+GET {{gateway}}/api/v1/eventos/categorias?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S08.02 Estados -> 200
+GET {{gateway}}/api/v1/eventos/estados?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S08.03 Listar eventos -> 200
+GET {{gateway}}/api/v1/eventos/eventos?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S08.04 Detalle -> 200
+GET {{gateway}}/api/v1/eventos/eventos/{{eventoId}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S08.05 Inscripciones del evento -> 200
+GET {{gateway}}/api/v1/eventos/eventos/{{eventoId}}/inscripciones?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+
+### ============================================================================
+### S09 · PQRS (pqrs-service :3010) — ruta pública en español, sin doble prefijo
+### ============================================================================
+
+### S09.01 Tipos -> 200
+GET {{gateway}}/api/v1/pqrs/tipos?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S09.02 Estados -> 200
+GET {{gateway}}/api/v1/pqrs/estados?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S09.03 Listar PQRS -> 200
+GET {{gateway}}/api/v1/pqrs?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S09.04 Detalle -> 200
+GET {{gateway}}/api/v1/pqrs/{{pqrsId}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S09.05 Historial -> 200
+GET {{gateway}}/api/v1/pqrs/{{pqrsId}}/historial
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+
+### ============================================================================
+### S10 · NOTIFICACIONES (notification-service :3009)
+### ============================================================================
+
+### S10.01 Listar notificaciones -> 200
+GET {{gateway}}/api/v1/notificaciones?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S10.02 Conteo de no leídas -> 200
+GET {{gateway}}/api/v1/notificaciones/no-leidas/conteo
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S10.03 Plantillas -> 200
+GET {{gateway}}/api/v1/notificaciones/plantillas?page=1&limit=10
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S10.04 Preferencias del usuario -> 200
+GET {{gateway}}/api/v1/notificaciones/preferencias
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S10.05 Suscripciones -> 200
+GET {{gateway}}/api/v1/notificaciones/suscripciones
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+
+### ============================================================================
+### S11 · ARCHIVOS (storage-service :3011)
+### ============================================================================
+
+### S11.01 Listar archivos (filtro ownerType) -> 200
+GET {{gateway}}/api/v1/archivos/archivos?page=1&limit=10&ownerType=solicitud
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S11.02 Metadata de un archivo -> 200
+GET {{gateway}}/api/v1/archivos/archivos/{{fileId}}
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S11.03 Descargar contenido -> 200 (Content-Type original)
+GET {{gateway}}/api/v1/archivos/archivos/{{fileId}}/download
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S11.04 Subir archivo (multipart/form-data) -> 201
+# @name uploadArchivo
+POST {{gateway}}/api/v1/archivos/archivos
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: multipart/form-data; boundary=----UajsQaBoundary
+
+------UajsQaBoundary
+Content-Disposition: form-data; name="file"; filename="coleccion-rest-client.pdf"
+Content-Type: application/pdf
+
+Contenido de prueba de la coleccion REST Client.
+------UajsQaBoundary
+Content-Disposition: form-data; name="ownerType"
+
+solicitud
+------UajsQaBoundary
+Content-Disposition: form-data; name="metadata"
+
+{"origen": "01-gateway.http"}
+------UajsQaBoundary--
+
+
+### ============================================================================
+### S12 · NEGATIVOS DEL GATEWAY
+### ============================================================================
+
+### S12.01 Ruta inexistente -> 404 (errorHandler del gateway, no del proxy)
+GET {{gateway}}/api/v1/no-existe
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### S12.02 Token corrupto -> 401
+GET {{gateway}}/api/v1/usuarios/usuarios
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.token.invalido
+
+### S12.03 Cuerpo inválido en reserva (endTime anterior a startTime) -> 400
+POST {{gateway}}/api/v1/reservas/reservas
+Authorization: Bearer {{login.response.body.data.accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "bookingTypeId": {{tipoReservaId}},
+  "resourceId": {{resourceId}},
+  "title": "Horario invalido",
+  "bookingDate": "2026-11-26",
+  "startTime": "11:00",
+  "endTime": "09:00"
+}
+
+
+### ============================================================================
+### S13 · VERIFICACIÓN EN BASE DE DATOS (correr en DBeaver/HeidiSQL)
+### ----------------------------------------------------------------------------
+### Conexión Docker: 127.0.0.1:3307 · uajs_user / uajs206**
+### SELECT id, reference_number, status_id, booking_date, start_time, end_time
+###   FROM uajs_bookings.bookings ORDER BY id DESC LIMIT 5;
+### SELECT id, ticket_number, status_id, title FROM uajs_requests.requests
+###   ORDER BY id DESC LIMIT 5;
+### ============================================================================

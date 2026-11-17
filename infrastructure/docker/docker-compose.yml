@@ -128,11 +128,7 @@ services:
       - uajs-network
 
   # ======================================================
-  # Microservicios implementados (3 de 12)
-  # NOTA: booking, event, notification, pqrs, request,
-  # resource, storage, university y user están VACÍOS
-  # (solo estructura de carpetas, sin código) y no se
-  # levantan hasta que se implementen.
+  # Microservicios implementados (12 de 12)
   # ======================================================
   api-gateway:
     build:
@@ -156,11 +152,18 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-uajs206**}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      JWT_SECRET: ${JWT_SECRET:-uajs_dev_jwt_secret_1234567890abcdefghijklmnopqrstuvwxyz}
-      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-change_me}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change_me}
-      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN:-uajs_service_token_2024}
-      CORS_ALLOWED_ORIGINS: http://localhost:3000,https://campus.uajs.edu
+      # Debe coincidir EXACTAMENTE con el JWT_SECRET de auth-service (más
+      # abajo en este mismo archivo): el gateway verifica con esta clave los
+      # access tokens que auth-service firma con la suya. Si difieren, cada
+      # request autenticado falla con "invalid signature" aunque el login
+      # haya funcionado — este mismatch existía antes de esta corrección.
+      JWT_SECRET: ${JWT_SECRET:-uajs_dev_jwt_secret_1234567890abcdefghijklmnopqrstuvwxyz_extra_long_654321}
+      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN:-uajs_service_token_2024_change_me_in_prod}
+      # localhost:5173 = servidor de desarrollo de Vite del frontend
+      # (uajs-smart-campus); localhost:8080 = frontend compilado servido por
+      # nginx en contenedor; localhost:3000 no tiene sentido aquí porque es
+      # el propio puerto del gateway, no un origen de navegador.
+      CORS_ALLOWED_ORIGINS: http://localhost:5173,http://localhost:8080,https://campus.uajs.edu
       RATE_LIMIT_WINDOW: 60000
       RATE_LIMIT_MAX: 100
       ELASTICSEARCH_HOST: elasticsearch
@@ -235,7 +238,7 @@ services:
       JWT_REFRESH_EXPIRES_IN: 7d
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-uajs_dev_jwt_access_secret_abcdefghijklmnopqrstuvwxyz_0123456789_extra}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-uajs_dev_jwt_refresh_secret_abcdefghijklmnopqrstuvwxyz_9876543210_largo}
-      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN:-uajs_service_token_2024}
+      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN:-uajs_service_token_2024_change_me_in_prod}
       ELASTICSEARCH_HOST: elasticsearch
       ELASTICSEARCH_PORT: '9200'
       ELASTICSEARCH_USER: elastic
@@ -252,6 +255,116 @@ services:
     healthcheck:
       test:
         ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3001/healthz']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - uajs-network
+
+  user-service:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.base
+    image: uajs-base
+    container_name: uajs-user
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ../../:/app
+      - /app/node_modules
+    command: npx nodemon apps/user-service/src/server.js
+    environment:
+      PORT: 3002
+      NODE_ENV: development
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      # Comparte la base de auth-service (usuarios/roles/permisos ya viven ahí)
+      MYSQL_DATABASE: uajs_auth
+      MYSQL_USER: ${MYSQL_USER:-uajs_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-uajs206**}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN:-uajs_service_token_2024_change_me_in_prod}
+      SERVICE_UNIVERSITY_URL: http://university-service:3004
+      ELASTICSEARCH_HOST: elasticsearch
+      ELASTICSEARCH_PORT: '9200'
+      ELASTICSEARCH_USER: elastic
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-changeme}
+    ports:
+      - '3002:3002'
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--no-verbose',
+          '--tries=1',
+          '--spider',
+          'http://localhost:3002/api/v1/users/health',
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - uajs-network
+
+  university-service:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.base
+    image: uajs-base
+    container_name: uajs-university
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ../../:/app
+      - /app/node_modules
+    command: npx nodemon apps/university-service/src/server.js
+    environment:
+      PORT: 3004
+      NODE_ENV: development
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: uajs_academic
+      MYSQL_USER: ${MYSQL_USER:-uajs_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-uajs206**}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN:-uajs_service_token_2024_change_me_in_prod}
+      ELASTICSEARCH_HOST: elasticsearch
+      ELASTICSEARCH_PORT: '9200'
+      ELASTICSEARCH_USER: elastic
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-changeme}
+    ports:
+      - '3004:3004'
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--no-verbose',
+          '--tries=1',
+          '--spider',
+          'http://localhost:3004/api/v1/university/health',
+        ]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -281,7 +394,7 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-uajs206**}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN:-uajs_service_token_2024}
+      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN:-uajs_service_token_2024_change_me_in_prod}
       ELASTICSEARCH_HOST: elasticsearch
       ELASTICSEARCH_PORT: '9200'
       ELASTICSEARCH_USER: elastic
@@ -312,12 +425,396 @@ services:
     networks:
       - uajs-network
 
+  storage-service:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.base
+    image: uajs-base
+    container_name: uajs-storage
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ../../:/app
+      - /app/node_modules
+      - storage_uploads:/app/apps/storage-service/uploads
+    command: npx nodemon apps/storage-service/src/server.js
+    environment:
+      PORT: 3011
+      NODE_ENV: development
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: uajs_storage
+      MYSQL_USER: ${MYSQL_USER:-uajs_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-uajs206**}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      STORAGE_DRIVER: local
+      STORAGE_PATH: /app/apps/storage-service/uploads
+      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN:-uajs_service_token_2024_change_me_in_prod}
+      ELASTICSEARCH_HOST: elasticsearch
+      ELASTICSEARCH_PORT: '9200'
+      ELASTICSEARCH_USER: elastic
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-changeme}
+    ports:
+      - '3011:3011'
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--no-verbose',
+          '--tries=1',
+          '--spider',
+          'http://localhost:3011/api/v1/storage/health',
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - uajs-network
+
+  resource-service:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.base
+    image: uajs-base
+    container_name: uajs-resource
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ../../:/app
+      - /app/node_modules
+    command: npx nodemon apps/resource-service/src/server.js
+    environment:
+      PORT: 3005
+      NODE_ENV: development
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: uajs_resources
+      MYSQL_USER: ${MYSQL_USER:-uajs_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-uajs206**}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN:-uajs_service_token_2024_change_me_in_prod}
+      ELASTICSEARCH_HOST: elasticsearch
+      ELASTICSEARCH_PORT: '9200'
+      ELASTICSEARCH_USER: elastic
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-changeme}
+    ports:
+      - '3005:3005'
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--no-verbose',
+          '--tries=1',
+          '--spider',
+          'http://localhost:3005/api/v1/resources/health',
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - uajs-network
+
+  booking-service:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.base
+    image: uajs-base
+    container_name: uajs-booking
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ../../:/app
+      - /app/node_modules
+    command: npx nodemon apps/booking-service/src/server.js
+    environment:
+      PORT: 3006
+      NODE_ENV: development
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: uajs_bookings
+      MYSQL_USER: ${MYSQL_USER:-uajs_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-uajs206**}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN:-uajs_service_token_2024_change_me_in_prod}
+      SERVICE_RESOURCE_URL: http://resource-service:3005
+      ELASTICSEARCH_HOST: elasticsearch
+      ELASTICSEARCH_PORT: '9200'
+      ELASTICSEARCH_USER: elastic
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-changeme}
+    ports:
+      - '3006:3006'
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      resource-service:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--no-verbose',
+          '--tries=1',
+          '--spider',
+          'http://localhost:3006/api/v1/bookings/health',
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - uajs-network
+
+  request-service:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.base
+    image: uajs-base
+    container_name: uajs-request
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ../../:/app
+      - /app/node_modules
+    command: npx nodemon apps/request-service/src/server.js
+    environment:
+      PORT: 3007
+      NODE_ENV: development
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: uajs_requests
+      MYSQL_USER: ${MYSQL_USER:-uajs_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-uajs206**}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN:-uajs_service_token_2024_change_me_in_prod}
+      SERVICE_STORAGE_URL: http://storage-service:3011
+      ELASTICSEARCH_HOST: elasticsearch
+      ELASTICSEARCH_PORT: '9200'
+      ELASTICSEARCH_USER: elastic
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-changeme}
+    ports:
+      - '3007:3007'
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      storage-service:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--no-verbose',
+          '--tries=1',
+          '--spider',
+          'http://localhost:3007/api/v1/requests/health',
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - uajs-network
+
+  event-service:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.base
+    image: uajs-base
+    container_name: uajs-event
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ../../:/app
+      - /app/node_modules
+    command: npx nodemon apps/event-service/src/server.js
+    environment:
+      PORT: 3008
+      NODE_ENV: development
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: uajs_events
+      MYSQL_USER: ${MYSQL_USER:-uajs_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-uajs206**}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN:-uajs_service_token_2024_change_me_in_prod}
+      ELASTICSEARCH_HOST: elasticsearch
+      ELASTICSEARCH_PORT: '9200'
+      ELASTICSEARCH_USER: elastic
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-changeme}
+    ports:
+      - '3008:3008'
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--no-verbose',
+          '--tries=1',
+          '--spider',
+          'http://localhost:3008/api/v1/events/health',
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - uajs-network
+
+  pqrs-service:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.base
+    image: uajs-base
+    container_name: uajs-pqrs
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ../../:/app
+      - /app/node_modules
+    command: npx nodemon apps/pqrs-service/src/server.js
+    environment:
+      PORT: 3010
+      NODE_ENV: development
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: uajs_pqrs
+      MYSQL_USER: ${MYSQL_USER:-uajs_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-uajs206**}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN:-uajs_service_token_2024_change_me_in_prod}
+      SERVICE_STORAGE_URL: http://storage-service:3011
+      ELASTICSEARCH_HOST: elasticsearch
+      ELASTICSEARCH_PORT: '9200'
+      ELASTICSEARCH_USER: elastic
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-changeme}
+    ports:
+      - '3010:3010'
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      storage-service:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--no-verbose',
+          '--tries=1',
+          '--spider',
+          'http://localhost:3010/api/v1/pqrs/health',
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - uajs-network
+
+  notification-service:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.base
+    image: uajs-base
+    container_name: uajs-notification
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ../../:/app
+      - /app/node_modules
+    command: npx nodemon apps/notification-service/src/server.js
+    environment:
+      PORT: 3009
+      NODE_ENV: development
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: uajs_notifications
+      MYSQL_USER: ${MYSQL_USER:-uajs_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-uajs206**}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN:-uajs_service_token_2024_change_me_in_prod}
+      ELASTICSEARCH_HOST: elasticsearch
+      ELASTICSEARCH_PORT: '9200'
+      ELASTICSEARCH_USER: elastic
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-changeme}
+    ports:
+      - '3009:3009'
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--no-verbose',
+          '--tries=1',
+          '--spider',
+          'http://localhost:3009/api/v1/notifications/health',
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - uajs-network
+
 # ======================================================
 # Volúmenes persistentes
 # ======================================================
 volumes:
   mysql_data:
   redis_data:
+  storage_uploads:
   es-data:
     driver: local
 

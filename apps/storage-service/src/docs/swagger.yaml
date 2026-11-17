@@ -1,0 +1,72 @@
+openapi: 3.0.0
+info:
+  title: Storage Service API
+  version: 1.0.0
+  description: >
+    Almacenamiento de archivos adjuntos (PQRS, solicitudes, eventos, perfil).
+    Solo guarda metadata en MySQL; el contenido vive en el driver configurado
+    por STORAGE_DRIVER (local por defecto, bajo STORAGE_PATH).
+servers:
+  - url: /api/v1/storage
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200': { description: Service status }
+  /archivos:
+    get:
+      summary: >
+        List files. Regular users only see their own files; admin/staff can
+        see all and filter by ownerType.
+      parameters:
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, default: 10 } }
+        - { name: ownerType, in: query, schema: { type: string, enum: [pqrs, solicitud, evento, perfil] } }
+      responses:
+        '200': { description: Paginated list of files }
+    post:
+      summary: Upload a file (multipart/form-data, field name "file", max 10MB, PDF/JPG/JPEG/PNG/GIF only)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+                ownerType: { type: string, enum: [pqrs, solicitud, evento, perfil] }
+                ownerReferenceUuid: { type: string, format: uuid }
+                metadata: { type: string, description: 'JSON-encoded object' }
+      responses:
+        '201': { description: File uploaded }
+        '400': { description: Invalid file type, file too large, or invalid metadata JSON }
+  /archivos/{id}:
+    get:
+      summary: Get file metadata by id (owner or admin/staff only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: File found }
+        '403': { description: Not the owner and not admin/staff }
+        '404': { description: File not found }
+    delete:
+      summary: Delete a file (owner or admin/staff only) — removes both the DB record and the stored content
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: File deleted }
+        '403': { description: Not the owner and not admin/staff }
+  /archivos/{id}/download:
+    get:
+      summary: Download the file content (owner or admin/staff only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200':
+          description: File content
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '403': { description: Not the owner and not admin/staff }
+        '404': { description: File not found }

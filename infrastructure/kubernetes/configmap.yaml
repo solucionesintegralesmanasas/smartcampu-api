@@ -1,0 +1,35 @@
+# ============================================================
+# ConfigMap compartido — valores NO sensibles comunes a todos
+# los microservicios. Los valores sensibles (contraseñas,
+# tokens, secretos JWT) van en secrets.yaml (a partir de
+# secrets.yaml.example), nunca aquí.
+# ============================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: uajs-shared-config
+  namespace: uajs-smart-campus
+data:
+  NODE_ENV: 'production'
+  MYSQL_HOST: 'mysql'
+  MYSQL_PORT: '3306'
+  MYSQL_USER: 'uajs_user'
+  REDIS_HOST: 'redis'
+  REDIS_PORT: '6379'
+  ELASTICSEARCH_HOST: 'elasticsearch'
+  ELASTICSEARCH_PORT: '9200'
+  ELASTICSEARCH_USER: 'elastic'
+  # URLs internas entre servicios (DNS de Service de Kubernetes:
+  # <service-name>.<namespace>.svc.cluster.local, aquí acortado a
+  # <service-name> porque todo corre en el mismo namespace).
+  SERVICE_AUTH_URL: 'http://auth-service:3001'
+  SERVICE_USER_URL: 'http://user-service:3002'
+  SERVICE_CATALOG_URL: 'http://catalog-service:3003'
+  SERVICE_UNIVERSITY_URL: 'http://university-service:3004'
+  SERVICE_RESOURCE_URL: 'http://resource-service:3005'
+  SERVICE_BOOKING_URL: 'http://booking-service:3006'
+  SERVICE_REQUEST_URL: 'http://request-service:3007'
+  SERVICE_EVENT_URL: 'http://event-service:3008'
+  SERVICE_NOTIFICATION_URL: 'http://notification-service:3009'
+  SERVICE_PQRS_URL: 'http://pqrs-service:3010'
+  SERVICE_STORAGE_URL: 'http://storage-service:3011'

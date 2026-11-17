@@ -139,21 +139,23 @@ class AuthRepository {
     }
   }
 
-  async updateRefreshToken(userId, refreshToken, deviceInfo = null, ipAddress = null) {
+  async createRefreshToken(userId, refreshToken, { deviceInfo = null, ipAddress = null, familyId = null } = {}) {
     const pool = await this.getPool();
     const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
     const payload = JSON.parse(
       Buffer.from(refreshToken.split('.')[1], 'base64url').toString('utf8'),
     );
     const expiresAt = new Date(payload.exp * 1000);
+    const resolvedFamilyId = familyId || crypto.randomUUID();
     await pool.query(
       `INSERT INTO refresh_tokens (
         uuid, user_id, token_hash, family_id,
         device_info, ip_address, issued_at, expires_at
       )
-       VALUES (UUID(), ?, ?, UUID(), ?, ?, NOW(), ?)`,
-      [userId, tokenHash, deviceInfo, ipAddress, expiresAt],
+       VALUES (UUID(), ?, ?, ?, ?, ?, NOW(), ?)`,
+      [userId, tokenHash, resolvedFamilyId, deviceInfo, ipAddress, expiresAt],
     );
+    return { familyId: resolvedFamilyId };
   }
 
   async findByRefreshToken(refreshToken) {
@@ -168,6 +170,48 @@ class AuthRepository {
       [tokenHash],
     );
     return this.hydrate(rows[0]);
+  }
+
+  /**
+   * Busca el registro crudo de un refresh token (sin filtrar por revoked_at),
+   * para poder distinguir "no existe" de "ya fue usado/revocado" y así
+   * detectar reuso (posible robo) en refreshToken().
+   */
+  async findRefreshTokenRecord(refreshToken) {
+    const pool = await this.getPool();
+    const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+    const rows = await pool.query(
+      `SELECT id, user_id AS userId, family_id AS familyId,
+              revoked_at AS revokedAt, expires_at AS expiresAt
+       FROM refresh_tokens WHERE token_hash = ?`,
+      [tokenHash],
+    );
+    return rows[0] || null;
+  }
+
+  async revokeRefreshTokenByHash(refreshToken, reason = 'logout') {
+    const pool = await this.getPool();
+    const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+    await pool.query(
+      'UPDATE refresh_tokens SET revoked_at = NOW(), revoke_reason = ? WHERE token_hash = ? AND revoked_at IS NULL',
+      [reason, tokenHash],
+    );
+  }
+
+  async revokeRefreshTokenById(id, reason = 'rotation') {
+    const pool = await this.getPool();
+    await pool.query(
+      'UPDATE refresh_tokens SET revoked_at = NOW(), revoke_reason = ? WHERE id = ?',
+      [reason, id],
+    );
+  }
+
+  async revokeRefreshTokenFamily(familyId, reason = 'theft') {
+    const pool = await this.getPool();
+    await pool.query(
+      'UPDATE refresh_tokens SET revoked_at = NOW(), revoke_reason = ? WHERE family_id = ? AND revoked_at IS NULL',
+      [reason, familyId],
+    );
   }
 
   async invalidateRefreshTokens(userId, reason = 'logout') {
