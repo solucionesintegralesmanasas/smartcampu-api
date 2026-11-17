@@ -1,0 +1,34 @@
+# Configuración de Fly.io para pqrs-service
+app = "uajs-smartcampus-pqrs-service"
+primary_region = "bog"
+
+[build]
+  dockerfile = "../../Dockerfile"
+
+  [build.args]
+    SERVICE_NAME = "pqrs-service"
+    PORT = "3010"
+    HEALTH_PATH = "/healthz"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "3010"
+
+[http_service]
+  internal_port = 3010
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "15s"
+    method = "GET"
+    path = "/healthz"
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1
