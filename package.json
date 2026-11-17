@@ -24,7 +24,7 @@
     "es:setup": "node scripts/elasticsearch/setup.js",
     "es:status": "node scripts/elasticsearch/setup.js --status",
     "clean": "turbo run clean && rm -rf node_modules",
-    "prepare": "husky install"
+    "prepare": "husky install || true"
   },
   "devDependencies": {
     "@commitlint/cli": "^18.4.3",
