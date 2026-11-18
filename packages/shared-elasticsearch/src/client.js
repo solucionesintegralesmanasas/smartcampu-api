@@ -46,7 +46,7 @@ class ElasticsearchClient {
       apiVersion,
       maxRetries,
       requestTimeout,
-      sniffOnStart: true,
+      sniffOnStart: false,
     });
 
     this.breaker = new CircuitBreaker(

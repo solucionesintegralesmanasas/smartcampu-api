@@ -138,6 +138,14 @@ function prepararVariablesEntorno() {
   if (!process.env.CORS_ALLOWED_ORIGINS) {
     process.env.CORS_ALLOWED_ORIGINS = '*';
   }
+
+  if (!process.env.REDIS_HOST) {
+    process.env.REDIS_HOST = '127.0.0.1';
+  }
+
+  if (!process.env.ELASTICSEARCH_HOST) {
+    process.env.ELASTICSEARCH_HOST = '127.0.0.1';
+  }
 }
 
 /**

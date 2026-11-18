@@ -12,7 +12,13 @@ const connection = {
  * @param {string} name - Nombre de la cola.
  * @returns {Queue} Instancia de la cola.
  */
-const createQueue = (name) => new Queue(name, { connection });
+const createQueue = (name) => {
+  const queue = new Queue(name, { connection });
+  if (typeof queue.on === 'function') {
+    queue.on('error', () => {});
+  }
+  return queue;
+};
 
 /**
  * Crea un trabajador de BullMQ.
@@ -20,6 +26,12 @@ const createQueue = (name) => new Queue(name, { connection });
  * @param {Function} processor - Función procesadora.
  * @returns {Worker} Instancia del trabajador.
  */
-const createWorker = (name, processor) => new Worker(name, processor, { connection });
+const createWorker = (name, processor) => {
+  const worker = new Worker(name, processor, { connection });
+  if (typeof worker.on === 'function') {
+    worker.on('error', () => {});
+  }
+  return worker;
+};
 
 module.exports = { createQueue, createWorker };
