@@ -1,6 +1,6 @@
 # Configuración de Fly.io para pqrs-service
 app = "uajs-smartcampus-pqrs-service"
-primary_region = "bog"
+primary_region = "gru"
 
 [build]
   dockerfile = "../../Dockerfile"

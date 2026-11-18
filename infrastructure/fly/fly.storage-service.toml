@@ -1,6 +1,6 @@
 # Configuración de Fly.io para storage-service
 app = "uajs-smartcampus-storage-service"
-primary_region = "bog"
+primary_region = "gru"
 
 [build]
   dockerfile = "../../Dockerfile"

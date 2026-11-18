@@ -21,8 +21,8 @@ jest.mock('../../src/config/env', () => {
   };
 });
 
-const logger = require('../../src/config/logger');
 const { env } = require('../../src/config/env');
+const logger = require('../../src/config/logger');
 const {
   ForbiddenError,
   NotFoundError,

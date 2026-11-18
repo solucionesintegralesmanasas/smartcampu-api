@@ -1,7 +1,7 @@
 const express = require('express');
 
-const { requireAuth, optionalAuth } = require('../../core/middlewares/auth.middleware');
 const { ValidationError } = require('../../core/exceptions');
+const { requireAuth, optionalAuth } = require('../../core/middlewares/auth.middleware');
 const StorageProducer = require('../../jobs/producers/storage.producer');
 
 const ArchivoController = require('./archivo.controller');

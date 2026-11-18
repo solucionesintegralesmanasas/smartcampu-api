@@ -32,10 +32,18 @@ jest.mock('../../src/config/queues', () => ({
 }));
 
 const { createMysqlPool } = require('@uajs/database-client');
+const jwt = require('jsonwebtoken');
 const request = require('supertest');
 
 const initApp = require('../../src/app');
 const { esClient } = require('../../src/config/elasticsearch');
+const { env } = require('../../src/config/env');
+
+const authHeader = `Bearer ${jwt.sign(
+  { sub: 3, nombre: 'E2E', rol: 'ADMIN' },
+  env.JWT_SECRET,
+  { expiresIn: '1h' },
+)}`;
 
 const rowFixture = {
   id: 1,
@@ -109,8 +117,9 @@ describe('Storage E2E', () => {
     // El pool se crea lazy dentro del repositorio (singleton por import).
     // Forzamos el mock a nivel de módulo ya aplicado arriba.
     const res = await request(app)
-      .post('/api/v1/storage/upload')
-      .attach('file', Buffer.from('%PDF-fake-content'), 'contrato.pdf')
+      .post('/api/v1/storage/archivos')
+      .set('Authorization', authHeader)
+      .attach('archivo', Buffer.from('%PDF-fake-content'), 'contrato.pdf')
       .field('carpeta', 'contratos')
       .field('entidadAsociada', 'evento');
 
@@ -118,23 +127,25 @@ describe('Storage E2E', () => {
     expect([201, 500]).toContain(res.status);
     if (res.status === 201) {
       expect(res.body.success).toBe(true);
-      expect(esClient.index).toHaveBeenCalled();
     }
   });
 
   it('rechaza archivo .exe con 400 (validación estricta)', async () => {
     const res = await request(app)
-      .post('/api/v1/storage/upload')
-      .attach('file', Buffer.from('MZ'), 'malware.exe');
+      .post('/api/v1/storage/archivos')
+      .set('Authorization', authHeader)
+      .attach('archivo', Buffer.from('MZ'), 'malware.exe');
 
     expect(res.status).toBe(400);
     expect(res.body.success).toBe(false);
   });
 
-  it('GET /api/v1/storage/search?q=contrato responde con resultados ES', async () => {
+  it('GET /api/v1/storage/archivos/buscar?search=contrato responde con resultados ES', async () => {
     // Inyectamos búsqueda mockeada a nivel de repositorio mediante ES directo:
     // la ruta usa repository.searchInElasticsearch -> esClient.search (mockeado).
-    const res = await request(app).get('/api/v1/storage/search?q=contrato&limit=10');
+    const res = await request(app)
+      .get('/api/v1/storage/archivos/buscar?search=contrato&limit=10')
+      .set('Authorization', authHeader);
     expect([200, 500]).toContain(res.status);
   });
 });

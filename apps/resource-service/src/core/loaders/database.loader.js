@@ -1,18 +1,25 @@
-const { ensureResourceIndex } = require('../../config/elasticsearch');
-const logger = require('../../config/logger');
 const { getMysqlPool } = require('../../config/database/mysql');
 const { getRedisClient } = require('../../config/database/redis');
+const { ensureResourceIndex } = require('../../config/elasticsearch');
+const logger = require('../../config/logger');
 
 /**
- * Verifica MySQL (fatal si no responde) e inicializa Redis y el índice de Elasticsearch
- * (no fatales: el servicio arranca y reintenta en la siguiente operación).
+ * Verifica MySQL, Redis y el índice de Elasticsearch de forma no fatal en arranque
+ * para que el servicio inicie y reintente en la siguiente operación.
  */
 const databaseLoader = async () => {
-  const isMysqlUp = await getMysqlPool().ping();
-  if (!isMysqlUp) {
-    throw new Error('No se pudo conectar a MySQL (uajs_resources)');
+  try {
+    const isMysqlUp = await getMysqlPool().ping();
+    if (isMysqlUp) {
+      logger.info('Conexión a MySQL verificada');
+    } else {
+      logger.warn('Ping inicial a MySQL (uajs_resources) falló (no fatal en arranque)');
+    }
+  } catch (error) {
+    logger.warn('Ping inicial a MySQL (uajs_resources) falló (no fatal en arranque)', {
+      error: error.message,
+    });
   }
-  logger.info('Conexión a MySQL verificada');
 
   try {
     await getRedisClient().ping();

@@ -28,6 +28,7 @@ jest.mock('../../src/config/elasticsearch', () => ({
 }));
 
 const { createMysqlPool } = require('@uajs/database-client');
+
 const { esClient } = require('../../src/config/elasticsearch');
 const ArchivoRepository = require('../../src/modules/archivo/archivo.repository');
 
@@ -183,7 +184,9 @@ describe('ArchivoRepository', () => {
     it('busca por nombre con LIKE escapando comodines', async () => {
       pool.query.mockResolvedValueOnce([{ total: 0 }]).mockResolvedValueOnce([]);
 
-      await repo.findAll({ page: 1, limit: 10, scope: SCOPE_TOTAL, search: '50%_off' });
+      await repo.findAll({
+        page: 1, limit: 10, scope: SCOPE_TOTAL, search: '50%_off',
+      });
 
       expect(pool.query.mock.calls[0][0]).toContain('nombre_original LIKE ?');
       expect(pool.query.mock.calls[0][1]).toEqual(['%50\\%\\_off%']);
@@ -346,7 +349,9 @@ describe('ArchivoRepository', () => {
     it('restringe la búsqueda al alcance del usuario', async () => {
       esClient.search.mockResolvedValue(respuesta([]));
 
-      await repo.searchInElasticsearch({ search: 'contrato', scope: SCOPE_PRIVADO, page: 1, limit: 20 });
+      await repo.searchInElasticsearch({
+        search: 'contrato', scope: SCOPE_PRIVADO, page: 1, limit: 20,
+      });
 
       const body = esClient.search.mock.calls[0][0];
       expect(body.index).toBe('test_uajs_storage');
@@ -390,7 +395,7 @@ describe('ArchivoRepository', () => {
 
       await repo.searchInElasticsearch({ search: 'a*b?', scope: SCOPE_TOTAL });
 
-      const should = esClient.search.mock.calls[0][0].query.bool.must[0].bool.should;
+      const { should } = esClient.search.mock.calls[0][0].query.bool.must[0].bool;
       expect(should[1].wildcard['nombre_original.keyword'].value).toBe('*a\\*b\\?*');
     });
 

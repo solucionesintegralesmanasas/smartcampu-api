@@ -5,8 +5,8 @@ jest.mock('../../src/config/logger', () => ({
   debug: jest.fn(),
 }));
 
-const ArchivoController = require('../../src/modules/archivo/archivo.controller');
 const { ValidationError } = require('../../src/core/exceptions');
+const ArchivoController = require('../../src/modules/archivo/archivo.controller');
 
 const UUID = '550e8400-e29b-41d4-a716-446655440000';
 const USER = { id: 10, nombre: 'Juan', roles: ['STUDENT'] };

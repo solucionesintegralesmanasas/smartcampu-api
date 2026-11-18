@@ -1,8 +1,8 @@
 const jwt = require('jsonwebtoken');
 
 const { env } = require('../../src/config/env');
-const { requireAuth, optionalAuth } = require('../../src/core/middlewares/auth.middleware');
 const { UnauthorizedError } = require('../../src/core/exceptions');
+const { requireAuth, optionalAuth } = require('../../src/core/middlewares/auth.middleware');
 
 const reqWithToken = (token) => ({
   headers: token ? { authorization: `Bearer ${token}` } : {},

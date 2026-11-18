@@ -1,6 +1,6 @@
 # Configuración de Fly.io para catalog-service
 app = "uajs-smartcampus-catalog-service"
-primary_region = "bog"
+primary_region = "gru"
 
 [build]
   dockerfile = "../../Dockerfile"

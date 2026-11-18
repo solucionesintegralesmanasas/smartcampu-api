@@ -1,6 +1,6 @@
 const initApp = require('./app');
-const { env } = require('./config/env');
 const { getMysqlPool } = require('./config/database/mysql');
+const { env } = require('./config/env');
 const logger = require('./config/logger');
 const { buildDispatcher } = require('./core/container');
 const databaseLoader = require('./core/loaders/database.loader');
@@ -30,7 +30,7 @@ const startServer = async () => {
     deliveryConsumer = new DeliveryConsumer(dispatcher);
     eventsConsumer = new EventsConsumer(dispatcher);
 
-    server = app.listen(env.PORT);
+    server = app.listen(env.PORT, '0.0.0.0');
 
     server.on('error', (err) => {
       if (err.code === 'EADDRINUSE') {

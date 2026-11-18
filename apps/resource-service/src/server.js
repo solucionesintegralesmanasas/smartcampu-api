@@ -24,7 +24,7 @@ const startServer = async () => {
 
     resourceConsumer = new ResourceConsumer();
 
-    server = app.listen(env.PORT);
+    server = app.listen(env.PORT, '0.0.0.0');
 
     server.on('error', (err) => {
       if (err.code === 'EADDRINUSE') {

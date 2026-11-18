@@ -1,6 +1,6 @@
 # Configuración de Fly.io para auth-service
 app = "uajs-smartcampus-auth-service"
-primary_region = "bog"
+primary_region = "gru"
 
 [build]
   dockerfile = "../../Dockerfile"

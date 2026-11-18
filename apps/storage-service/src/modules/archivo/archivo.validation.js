@@ -19,9 +19,11 @@ const uuidParamSchema = z.object({
 
 const createArchivoSchema = z
   .object({
-    entidadAsociada: z.string().trim().min(1).max(50).optional(),
+    entidadAsociada: z.string().trim().min(1).max(50)
+      .optional(),
     uuidAsociado: z.string().uuid('UUID asociado inválido').optional(),
-    carpeta: z.string().trim().min(1).max(100).default('general'),
+    carpeta: z.string().trim().min(1).max(100)
+      .default('general'),
     publico: flagSchema.default(false),
   })
   .refine((data) => !data.uuidAsociado || Boolean(data.entidadAsociada), {
@@ -31,10 +33,14 @@ const createArchivoSchema = z
 
 const updateArchivoSchema = z
   .object({
-    nombreOriginal: z.string().trim().min(1).max(255).optional(),
-    entidadAsociada: z.string().trim().min(1).max(50).nullable().optional(),
+    nombreOriginal: z.string().trim().min(1).max(255)
+      .optional(),
+    entidadAsociada: z.string().trim().min(1).max(50)
+      .nullable()
+      .optional(),
     uuidAsociado: z.string().uuid('UUID asociado inválido').nullable().optional(),
-    carpeta: z.string().trim().min(1).max(100).optional(),
+    carpeta: z.string().trim().min(1).max(100)
+      .optional(),
     publico: flagSchema.optional(),
     activo: flagSchema.optional(),
   })
@@ -44,12 +50,15 @@ const updateArchivoSchema = z
 
 const listArchivosQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().max(100).default(20),
+  limit: z.coerce.number().int().positive().max(100)
+    .default(20),
   usuarioId: z.coerce.number().int().positive().optional(),
   tipo: z.string().trim().min(1).optional(),
-  entidad: z.string().trim().min(1).max(50).optional(),
+  entidad: z.string().trim().min(1).max(50)
+    .optional(),
   uuidAsociado: z.string().uuid('UUID asociado inválido').optional(),
-  carpeta: z.string().trim().min(1).max(100).optional(),
+  carpeta: z.string().trim().min(1).max(100)
+    .optional(),
   activo: flagSchema.optional(),
 });
 

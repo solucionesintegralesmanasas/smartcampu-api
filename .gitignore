@@ -56,3 +56,7 @@ Thumbs.db
 
 # Documentos de generacion (no versionar)
 docs/uajs-smart-campus-16-prompts-de-generación-v2-1-enterprise-grade-con-elasticsearch.md
+
+# Archivos comprimidos y notas locales de despliegue
+*.zip
+url del proyecto depleado.txt
