@@ -13,7 +13,7 @@ primary_region = "gru"
 [env]
   NODE_ENV = "production"
   PORT = "3000"
-  CORS_ALLOWED_ORIGINS = "https://smartcampus-sigma.vercel.app,https://smartcampus.solucionesintegralesmana.com,http://localhost:5173"
+  CORS_ALLOWED_ORIGINS = "https://smartcampus-sigma.vercel.app,https://smartcampus-sigma-*.vercel.app,https://uajs-smart-campus.vercel.app,https://uajs-smart-campus-*.vercel.app,https://smartcampus.solucionesintegralesmana.com,http://localhost:5173"
   SERVICE_AUTH_URL = "http://127.0.0.1:3001"
   SERVICE_USER_URL = "http://127.0.0.1:3002"
   SERVICE_CATALOG_URL = "http://127.0.0.1:3003"

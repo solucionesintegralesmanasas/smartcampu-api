@@ -13,11 +13,20 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(32, 'JWT_SECRET debe tener al menos 32 caracteres'),
   // '*' => true (refleja el Origin de la petición; compatible con credentials).
   // Un arreglo ['*'] no funciona: el paquete cors lo compara literalmente.
-  CORS_ALLOWED_ORIGINS: z
-    .string()
-    .transform((val) =>
-      val.trim() === '*' ? true : val.split(',').map((s) => s.trim()).filter(Boolean),
-    ),
+  // Entradas con '*' (ej. https://mi-app-*.vercel.app) se convierten en RegExp
+  // para aceptar las URLs de preview de Vercel, que cambian en cada despliegue.
+  CORS_ALLOWED_ORIGINS: z.string().transform((val) => {
+    if (val.trim() === '*') return true;
+    return val
+      .split(',')
+      .map((s) => s.trim().replace(/\/+$/, ''))
+      .filter(Boolean)
+      .map((o) =>
+        o.includes('*')
+          ? new RegExp(`^${o.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[a-z0-9-]+')}$`, 'i')
+          : o,
+      );
+  }),
   // Secreto compartido inyectado en cada request proxiada, para que los
   // microservicios internos verifiquen que la petición vino del gateway
   // (y por lo tanto X-User-Id/X-User-Roles son confiables) y no de un
