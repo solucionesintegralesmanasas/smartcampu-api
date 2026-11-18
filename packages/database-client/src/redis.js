@@ -9,6 +9,21 @@ class RedisConnectionError extends Error {
   }
 }
 
+/**
+ * Determina si debe habilitarse TLS para Redis/Valkey (por REDIS_TLS=true o
+ * proveedores gestionados como Aiven que usan rediss://).
+ * @param {string} host - Host de destino.
+ * @returns {{ rejectUnauthorized: boolean } | undefined} Configuración TLS o undefined.
+ */
+function resolveRedisTls(host) {
+  if (process.env.REDIS_TLS === 'false') return undefined;
+  const isManagedCloud = typeof host === 'string' && host.endsWith('.aivencloud.com');
+  if (process.env.REDIS_TLS === 'true' || isManagedCloud) {
+    return { rejectUnauthorized: false };
+  }
+  return undefined;
+}
+
 class RedisClient {
   constructor({
     host,
@@ -20,8 +35,11 @@ class RedisClient {
     commandTimeout = 5000,
     maxAttempts = 10,
     logger = null,
+    tls,
   } = {}) {
     if (!host) throw new RedisConnectionError('host es obligatorio');
+
+    const resolvedTls = tls === undefined ? resolveRedisTls(host) : tls;
 
     this.client = new Redis({
       host,
@@ -33,6 +51,7 @@ class RedisClient {
       commandTimeout,
       enableReadyCheck: true,
       lazyConnect: false,
+      ...(resolvedTls ? { tls: resolvedTls } : {}),
       retryStrategy(times) {
         if (times > maxAttempts) return null;
         return Math.min(100 * 2 ** (times - 1), 5000) + Math.floor(Math.random() * 100);
