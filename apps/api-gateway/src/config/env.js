@@ -21,11 +21,11 @@ const envSchema = z.object({
       .split(',')
       .map((s) => s.trim().replace(/\/+$/, ''))
       .filter(Boolean)
-      .map((o) =>
-        o.includes('*')
-          ? new RegExp(`^${o.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[a-z0-9-]+')}$`, 'i')
-          : o,
-      );
+      .map((o) => {
+        if (!o.includes('*')) return o;
+        const escaped = o.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[a-z0-9-]+');
+        return new RegExp(`^${escaped}$`, 'i');
+      });
   }),
   // Secreto compartido inyectado en cada request proxiada, para que los
   // microservicios internos verifiquen que la petición vino del gateway
