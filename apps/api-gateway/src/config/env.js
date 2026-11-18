@@ -11,7 +11,13 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(3000),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   JWT_SECRET: z.string().min(32, 'JWT_SECRET debe tener al menos 32 caracteres'),
-  CORS_ALLOWED_ORIGINS: z.string().transform((val) => val.split(',').map((s) => s.trim())),
+  // '*' => true (refleja el Origin de la petición; compatible con credentials).
+  // Un arreglo ['*'] no funciona: el paquete cors lo compara literalmente.
+  CORS_ALLOWED_ORIGINS: z
+    .string()
+    .transform((val) =>
+      val.trim() === '*' ? true : val.split(',').map((s) => s.trim()).filter(Boolean),
+    ),
   // Secreto compartido inyectado en cada request proxiada, para que los
   // microservicios internos verifiquen que la petición vino del gateway
   // (y por lo tanto X-User-Id/X-User-Roles son confiables) y no de un
