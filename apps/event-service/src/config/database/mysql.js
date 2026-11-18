@@ -1,4 +1,5 @@
 /* eslint-disable no-await-in-loop */
+const { resolveMysqlSsl } = require('@uajs/database-client');
 const mysql = require('mysql2/promise');
 
 const { env } = require('../env');
@@ -13,6 +14,7 @@ let pool = null;
  */
 const getMysqlPool = () => {
   if (!pool) {
+    const ssl = resolveMysqlSsl(env.MYSQL_HOST);
     pool = mysql.createPool({
       host: env.MYSQL_HOST,
       port: env.MYSQL_PORT,
@@ -24,6 +26,7 @@ const getMysqlPool = () => {
       timezone: 'Z',
       enableKeepAlive: true,
       keepAliveInitialDelay: 0,
+      ...(ssl ? { ssl } : {}),
     });
   }
   return pool;

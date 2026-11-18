@@ -1,4 +1,5 @@
 /* eslint-disable no-console, no-await-in-loop, no-promise-executor-return */
+const { resolveMysqlSsl } = require('@uajs/database-client');
 const mysql = require('mysql2/promise');
 
 const { env } = require('../env');
@@ -8,6 +9,7 @@ const { env } = require('../env');
  * @returns {Promise<mysql.Pool>} Pool de conexiones de MySQL.
  */
 const createMySQLPool = async () => {
+  const ssl = resolveMysqlSsl(env.MYSQL_HOST);
   const pool = mysql.createPool({
     host: env.MYSQL_HOST,
     port: env.MYSQL_PORT,
@@ -17,6 +19,7 @@ const createMySQLPool = async () => {
     connectionLimit: 10,
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,
+    ...(ssl ? { ssl } : {}),
   });
 
   let retries = 5;

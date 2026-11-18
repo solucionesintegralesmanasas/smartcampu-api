@@ -16,6 +16,21 @@ class MysqlPoolExhaustedError extends Error {
   }
 }
 
+/**
+ * Determina si debe habilitarse TLS para MySQL (por MYSQL_SSL=true o proveedores
+ * gestionados como Aiven que exigen transporte seguro).
+ * @param {string} host - Host de destino.
+ * @returns {{ rejectUnauthorized: boolean } | undefined} Configuración SSL o undefined.
+ */
+function resolveMysqlSsl(host) {
+  if (process.env.MYSQL_SSL === 'false') return undefined;
+  const isManagedCloud = typeof host === 'string' && host.endsWith('.aivencloud.com');
+  if (process.env.MYSQL_SSL === 'true' || isManagedCloud) {
+    return { rejectUnauthorized: false };
+  }
+  return undefined;
+}
+
 class MySQLPool {
   constructor({
     host,
@@ -26,10 +41,13 @@ class MySQLPool {
     connectionLimit = 20,
     queueLimit = 0,
     connectTimeout = 10000,
+    ssl,
   } = {}) {
     if (!host || !user || !database) {
       throw new MysqlConnectionError('host, user y database son obligatorios');
     }
+
+    const resolvedSsl = ssl === undefined ? resolveMysqlSsl(host) : ssl;
 
     this.pool = mysql.createPool({
       host,
@@ -46,6 +64,7 @@ class MySQLPool {
       timezone: 'Z',
       charset: 'utf8mb4',
       multipleStatements: false,
+      ...(resolvedSsl ? { ssl: resolvedSsl } : {}),
     });
 
     this.breaker = new CircuitBreaker(
@@ -148,6 +167,7 @@ module.exports = {
   MySQLPool,
   MysqlConnectionError,
   MysqlPoolExhaustedError,
+  resolveMysqlSsl,
   pingPool: async (pool) => pool.ping(),
   closePool: async (pool) => pool.close(),
 };

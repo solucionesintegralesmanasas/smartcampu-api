@@ -5,6 +5,7 @@ const {
   closePool,
   MysqlConnectionError,
   MysqlPoolExhaustedError,
+  resolveMysqlSsl,
 } = require('./src/mysql');
 const {
   createRedisClient,
@@ -21,6 +22,7 @@ module.exports = {
   closePool,
   MysqlConnectionError,
   MysqlPoolExhaustedError,
+  resolveMysqlSsl,
   createRedisClient,
   RedisClient,
   pingRedis,

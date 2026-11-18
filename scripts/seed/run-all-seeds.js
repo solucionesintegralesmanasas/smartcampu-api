@@ -6,6 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 
+const { resolveMysqlSsl } = require('@uajs/database-client');
 const mysql = require('mysql2/promise');
 
 // Configuración de conexión con fallback inteligente para desarrollo local / docker
@@ -33,17 +34,21 @@ const DB_CONFIGS = [
 async function getAvailableConnection() {
   for (const config of DB_CONFIGS) {
     try {
+      const ssl = resolveMysqlSsl(config.host);
       const conn = await mysql.createConnection({
         ...config,
         multipleStatements: true,
-        connectTimeout: 2000,
+        connectTimeout: 10000,
+        ...(ssl ? { ssl } : {}),
       });
       console.log(
         `[DB] Conectado exitosamente con usuario '${config.user}' en ${config.host}:${config.port}`,
       );
       return conn;
     } catch (err) {
-      // Intentar la siguiente configuración
+      if (process.env.MYSQL_HOST && config.host === process.env.MYSQL_HOST) {
+        console.warn(`[DB] Falló conexión a ${config.host}:${config.port}: ${err.message}`);
+      }
     }
   }
   throw new Error(
