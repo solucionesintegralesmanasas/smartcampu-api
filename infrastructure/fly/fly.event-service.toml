@@ -1,6 +1,6 @@
 # Configuración de Fly.io para event-service
 app = "uajs-smartcampus-event-service"
-primary_region = "bog"
+primary_region = "gru"
 
 [build]
   dockerfile = "../../Dockerfile"
@@ -8,7 +8,7 @@ primary_region = "bog"
   [build.args]
     SERVICE_NAME = "event-service"
     PORT = "3008"
-    HEALTH_PATH = "/healthz"
+    HEALTH_PATH = "/api/v1/events/health"
 
 [env]
   NODE_ENV = "production"
@@ -26,7 +26,7 @@ primary_region = "bog"
     timeout = "5s"
     grace_period = "15s"
     method = "GET"
-    path = "/healthz"
+    path = "/api/v1/events/health"
 
 [[vm]]
   memory = "512mb"

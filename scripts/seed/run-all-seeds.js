@@ -94,6 +94,7 @@ async function main() {
     const databases = [
       'uajs_catalog',
       'uajs_auth',
+      'uajs_users',
       'uajs_academic',
       'uajs_resources',
       'uajs_bookings',
@@ -148,6 +149,7 @@ async function main() {
     const migrations = [
       'ms-catalog_001_init.sql',
       'ms-auth_001_init.sql',
+      'ms-users_001_init.sql',
       'ms-academic_001_init.sql',
       'ms-resources_001_init.sql',
       'ms-bookings_001_init.sql',

@@ -6,3 +6,6 @@ apps/*/node_modules
 packages/*/node_modules
 apps/*/server.err.log
 apps/*/server.log
+*.zip
+url del proyecto depleado.txt
+

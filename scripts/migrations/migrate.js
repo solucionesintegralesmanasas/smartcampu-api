@@ -33,8 +33,8 @@ const DB_NAME_REGEX = /CREATE DATABASE IF NOT EXISTS\s+`?([A-Za-z0-9_]+)`?/i;
 const getConfig = () => ({
   host: process.env.MYSQL_HOST || '127.0.0.1',
   port: parseInt(process.env.MYSQL_PORT || '3306', 10),
-  user: process.env.MYSQL_ROOT_USER || 'root',
-  password: process.env.MYSQL_ROOT_PASSWORD || '',
+  user: process.env.MYSQL_ROOT_USER || process.env.MYSQL_USER || 'root',
+  password: process.env.MYSQL_ROOT_PASSWORD || process.env.MYSQL_PASSWORD || '',
   multipleStatements: true,
 });
 
@@ -75,7 +75,8 @@ const controlTableExists = async (conn, database) => {
 
 const ensureControlTable = async (conn, database) => {
   await conn.query(
-    `CREATE DATABASE IF NOT EXISTS \`${database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
+    `CREATE DATABASE IF NOT EXISTS \`${database}\` `
+      + 'CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci',
   );
   await conn.query(`
     CREATE TABLE IF NOT EXISTS \`${database}\`.\`${CONTROL_TABLE}\` (
@@ -108,29 +109,37 @@ const up = async () => {
     let applied = 0;
 
     for (const migration of migrations) {
-      const { name, database, sql, checksum } = migration;
+      const {
+        name,
+        database,
+        sql,
+        checksum,
+      } = migration;
       await ensureControlTable(conn, database);
 
       const record = (await getApplied(conn, database)).get(name);
       if (record) {
         if (record.checksum !== checksum) {
-          log.warn(`${name} cambió desde que se aplicó (checksum distinto). Revise ${database} manualmente.`);
+          log.warn(
+            `${name} cambió desde que se aplicó (checksum distinto). `
+              + `Revise ${database} manualmente.`,
+          );
         }
-        continue;
+      } else {
+        log.info(`Aplicando ${name} → ${database}`);
+        await conn.query(sql);
+
+        const [[{ next }]] = await conn.query(
+          `SELECT COALESCE(MAX(batch), 0) + 1 AS next FROM \`${database}\`.\`${CONTROL_TABLE}\``,
+        );
+        await conn.query(
+          `INSERT INTO \`${database}\`.\`${CONTROL_TABLE}\` `
+            + '(migration, checksum, batch) VALUES (?, ?, ?)',
+          [name, checksum, next],
+        );
+        applied += 1;
+        log.ok(`${name} aplicada`);
       }
-
-      log.info(`Aplicando ${name} → ${database}`);
-      await conn.query(sql);
-
-      const [[{ next }]] = await conn.query(
-        `SELECT COALESCE(MAX(batch), 0) + 1 AS next FROM \`${database}\`.\`${CONTROL_TABLE}\``,
-      );
-      await conn.query(
-        `INSERT INTO \`${database}\`.\`${CONTROL_TABLE}\` (migration, checksum, batch) VALUES (?, ?, ?)`,
-        [name, checksum, next],
-      );
-      applied += 1;
-      log.ok(`${name} aplicada`);
     }
 
     log.ok(applied === 0 ? 'No hay migraciones pendientes.' : `${applied} migración(es) aplicada(s).`);
@@ -158,8 +167,9 @@ const status = async () => {
     }
 
     console.log('─'.repeat(72));
+    const pendingCount = migrations.length - appliedCount;
     console.log(
-      ` Total: ${migrations.length} | Aplicadas: ${appliedCount} | Pendientes: ${migrations.length - appliedCount}\n`,
+      ` Total: ${migrations.length} | Aplicadas: ${appliedCount} | Pendientes: ${pendingCount}\n`,
     );
   } finally {
     await conn.end();
@@ -231,4 +241,9 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { loadMigrations, up, status, down };
+module.exports = {
+  loadMigrations,
+  up,
+  status,
+  down,
+};

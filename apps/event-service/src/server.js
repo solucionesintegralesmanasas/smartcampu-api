@@ -24,7 +24,7 @@ const startServer = async () => {
 
     eventConsumer = new EventConsumer();
 
-    server = app.listen(env.PORT);
+    server = app.listen(env.PORT, '0.0.0.0');
 
     server.on('error', (err) => {
       if (err.code === 'EADDRINUSE') {

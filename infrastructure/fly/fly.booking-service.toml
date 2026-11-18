@@ -1,6 +1,6 @@
 # Configuración de Fly.io para booking-service
 app = "uajs-smartcampus-booking-service"
-primary_region = "bog"
+primary_region = "gru"
 
 [build]
   dockerfile = "../../Dockerfile"
@@ -8,11 +8,12 @@ primary_region = "bog"
   [build.args]
     SERVICE_NAME = "booking-service"
     PORT = "3006"
-    HEALTH_PATH = "/healthz"
+    HEALTH_PATH = "/api/v1/bookings/health"
 
 [env]
   NODE_ENV = "production"
   PORT = "3006"
+  SERVICE_RESOURCE_URL = "http://uajs-smartcampus-resource-service.internal:3005"
 
 [http_service]
   internal_port = 3006
@@ -26,7 +27,7 @@ primary_region = "bog"
     timeout = "5s"
     grace_period = "15s"
     method = "GET"
-    path = "/healthz"
+    path = "/api/v1/bookings/health"
 
 [[vm]]
   memory = "512mb"

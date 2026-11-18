@@ -1,6 +1,6 @@
 # Configuración de Fly.io para storage-service
 app = "uajs-smartcampus-storage-service"
-primary_region = "bog"
+primary_region = "gru"
 
 [build]
   dockerfile = "../../Dockerfile"
@@ -8,11 +8,12 @@ primary_region = "bog"
   [build.args]
     SERVICE_NAME = "storage-service"
     PORT = "3011"
-    HEALTH_PATH = "/healthz"
+    HEALTH_PATH = "/api/v1/storage/health"
 
 [env]
   NODE_ENV = "production"
   PORT = "3011"
+  STORAGE_PATH = "/uploads"
 
 [http_service]
   internal_port = 3011
@@ -26,7 +27,7 @@ primary_region = "bog"
     timeout = "5s"
     grace_period = "15s"
     method = "GET"
-    path = "/healthz"
+    path = "/api/v1/storage/health"
 
 [[vm]]
   memory = "512mb"

@@ -53,3 +53,7 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+
+# Archivos comprimidos y notas locales de despliegue
+*.zip
+url del proyecto depleado.txt

@@ -1,12 +1,12 @@
-# Configuración de Fly.io para api-gateway (punto de entrada público)
+# Configuración de Fly.io para smartcampu-api (despliegue unificado del monorepo)
 app = "smartcampu-api"
-primary_region = "bog"
+primary_region = "gru"
 
 [build]
   dockerfile = "Dockerfile"
 
   [build.args]
-    SERVICE_NAME = "api-gateway"
+    SERVICE_NAME = "all"
     PORT = "3000"
     HEALTH_PATH = "/health"
 
@@ -14,17 +14,17 @@ primary_region = "bog"
   NODE_ENV = "production"
   PORT = "3000"
   CORS_ALLOWED_ORIGINS = "*"
-  SERVICE_AUTH_URL = "http://uajs-smartcampus-auth-service.internal:3001"
-  SERVICE_USER_URL = "http://uajs-smartcampus-user-service.internal:3002"
-  SERVICE_CATALOG_URL = "http://uajs-smartcampus-catalog-service.internal:3003"
-  SERVICE_UNIVERSITY_URL = "http://uajs-smartcampus-university-service.internal:3004"
-  SERVICE_RESOURCE_URL = "http://uajs-smartcampus-resource-service.internal:3005"
-  SERVICE_BOOKING_URL = "http://uajs-smartcampus-booking-service.internal:3006"
-  SERVICE_REQUEST_URL = "http://uajs-smartcampus-request-service.internal:3007"
-  SERVICE_EVENT_URL = "http://uajs-smartcampus-event-service.internal:3008"
-  SERVICE_NOTIFICATION_URL = "http://uajs-smartcampus-notification-service.internal:3009"
-  SERVICE_PQRS_URL = "http://uajs-smartcampus-pqrs-service.internal:3010"
-  SERVICE_STORAGE_URL = "http://uajs-smartcampus-storage-service.internal:3011"
+  SERVICE_AUTH_URL = "http://127.0.0.1:3001"
+  SERVICE_USER_URL = "http://127.0.0.1:3002"
+  SERVICE_CATALOG_URL = "http://127.0.0.1:3003"
+  SERVICE_UNIVERSITY_URL = "http://127.0.0.1:3004"
+  SERVICE_RESOURCE_URL = "http://127.0.0.1:3005"
+  SERVICE_BOOKING_URL = "http://127.0.0.1:3006"
+  SERVICE_REQUEST_URL = "http://127.0.0.1:3007"
+  SERVICE_EVENT_URL = "http://127.0.0.1:3008"
+  SERVICE_NOTIFICATION_URL = "http://127.0.0.1:3009"
+  SERVICE_PQRS_URL = "http://127.0.0.1:3010"
+  SERVICE_STORAGE_URL = "http://127.0.0.1:3011"
 
 [http_service]
   internal_port = 3000
@@ -41,6 +41,6 @@ primary_region = "bog"
     path = "/health"
 
 [[vm]]
-  memory = "512mb"
+  memory = "1024mb"
   cpu_kind = "shared"
   cpus = 1

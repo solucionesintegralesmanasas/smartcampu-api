@@ -1,6 +1,6 @@
 # Configuración de Fly.io para user-service
 app = "uajs-smartcampus-user-service"
-primary_region = "bog"
+primary_region = "gru"
 
 [build]
   dockerfile = "../../Dockerfile"
@@ -8,11 +8,12 @@ primary_region = "bog"
   [build.args]
     SERVICE_NAME = "user-service"
     PORT = "3002"
-    HEALTH_PATH = "/healthz"
+    HEALTH_PATH = "/api/v1/users/health"
 
 [env]
   NODE_ENV = "production"
   PORT = "3002"
+  SERVICE_UNIVERSITY_URL = "http://uajs-smartcampus-university-service.internal:3004"
 
 [http_service]
   internal_port = 3002
@@ -26,7 +27,7 @@ primary_region = "bog"
     timeout = "5s"
     grace_period = "15s"
     method = "GET"
-    path = "/healthz"
+    path = "/api/v1/users/health"
 
 [[vm]]
   memory = "512mb"
